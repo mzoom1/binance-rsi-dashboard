@@ -1,0 +1,8 @@
+{
+  "symbols": [
+    { "symbol": "BTCUSDT", "status": "TRADING", "isSpotTradingAllowed": true, "baseAsset": "BTC", "quoteAsset": "USDT" },
+    { "symbol": "ETHUSDT", "status": "TRADING", "isSpotTradingAllowed": true, "baseAsset": "ETH", "quoteAsset": "USDT" },
+    { "symbol": "BNBUSDT", "status": "TRADING", "isSpotTradingAllowed": true, "baseAsset": "BNB", "quoteAsset": "USDT" },
+    { "symbol": "BTCBUSD", "status": "TRADING", "isSpotTradingAllowed": true, "baseAsset": "BTC", "quoteAsset": "BUSD" }
+  ]
+}
