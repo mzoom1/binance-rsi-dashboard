@@ -1,5 +1,5 @@
 {
   "crons": [
-    { "path": "/api/prewarm", "schedule": "*/1 * * * *" }
+    { "path": "/api/prewarm", "schedule": "0 10 * * *" }
   ]
 }
