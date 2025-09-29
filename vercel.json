@@ -1,14 +1,5 @@
 {
-  "functions": {
-    "app/api/**/route.ts": {
-      "runtime": "nodejs20.x",
-      "regions": ["fra1", "cdg1", "arn1"]
-    }
-  },
   "crons": [
-    {
-      "path": "/api/prewarm",
-      "schedule": "*/1 * * * *"
-    }
+    { "path": "/api/prewarm", "schedule": "*/1 * * * *" }
   ]
 }
