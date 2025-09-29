@@ -1,6 +1,9 @@
 export const preferredRegion = ['fra1','cdg1','arn1'];
 export const runtime = 'nodejs';
 
+export const preferredRegion = ['fra1','cdg1','arn1'];
+export const runtime = 'nodejs';
+
 import { NextResponse } from 'next/server';
 import { getKlines } from '@/lib/binance';
 import { rsi } from '@/lib/rsi';
