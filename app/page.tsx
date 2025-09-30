@@ -165,3 +165,9 @@ function HomeClient() {
   );
 }
 
+// гарантовано впорядкований state
+const [selectedIntervals, setSelected] = useState<string[]>(
+  sortIntervals(['1h'])
+);
+
+const setSelectedSorted = (next: string[]) => setSelected(sortIntervals(next));
