@@ -1,16 +1,16 @@
 'use client';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
-
 import { sortIntervals } from '@/lib/intervals';
 import { useMemo, useState, useEffect } from 'react';
+type Filters = { oversold: boolean; overbought: boolean };
+
 import { useQueries } from '@tanstack/react-query';
 import { PersistQueryClientProvider, queryClient, persister } from '@/lib/reactQuery';
 import Controls from '@/components/Controls';
 import SymbolTable, { type RowMulti, type SortKey, type SortDir } from '@/components/SymbolTable';
 
 type Market = 'spot' | 'futures';
-type Filters = { oversold: boolean; overbought: boolean };
 type SummaryRow = { symbol: string; price: number | null; rsi: number | null; change24h: number | null };
 type SummaryResp = { rows: SummaryRow[]; total: number; nextOffset: number | null; meta: any };
 
@@ -27,12 +27,12 @@ function HomeClient() {
   const [selectedIntervals, setSelected] = useState<string[]>(['5m','15m','1h','4h']);
   const [search, setSearch] = useState('');
   const [filters, setFilters] = useState<Filters>({ oversold: false, overbought: false });
+
   const [status, setStatus] = useState('Готово');
 
   // сортування: 'symbol' | 'price' | 'change24h' | 'rsi:<interval>'
   const [sortKey, setSortKey] = useState<SortKey>('rsi:5m');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
-
   useEffect(() => {
     if (sortKey.startsWith('rsi:')) {
       const iv = sortKey.slice(4);
@@ -42,12 +42,12 @@ function HomeClient() {
       }
     }
   }, [selectedIntervals, sortKey]);
-
   const onSort = (key: SortKey) => {
-    if (key === sortKey) setSortDir(d => (d === 'asc' ? 'desc' : 'asc'));
+    if (key === sortKey) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
     else { setSortKey(key); setSortDir(key === 'symbol' ? 'asc' : 'desc'); }
   };
 
+  // Фетчер сторінок для одного інтервалу (батчить сторінки, але сам запит кешується по інтервалу)
   async function fetchSummaryAllPages(interval: string): Promise<SummaryRow[]> {
     const pageSize = 200;
     let offset = 0;
@@ -68,9 +68,9 @@ function HomeClient() {
   // Кожен інтервал — окремий запит/кеш
   const queries = useQueries({
     queries: selectedIntervals.map(iv => ({
-      queryKey: ['summary', market, iv],
+      queryKey: ['summary', market, iv], // ключ НЕ змінюється при приховуванні — кеш стабільний
       queryFn: () => fetchSummaryAllPages(iv),
-      placeholderData: (prev: SummaryRow[] | undefined) => prev,
+      placeholderData: (prev: SummaryResp | undefined) => prev,   // показати старі дані, поки оновлюємо
       staleTime: 60 * 1000,
       gcTime: 60 * 60 * 1000,
     })),
@@ -164,3 +164,11 @@ function HomeClient() {
     </div>
   );
 }
+
+// гарантовано впорядкований state
+const [selectedIntervals, setSelected] = useState<string[]>(
+  sortIntervals(['1h'])
+);
+
+const setSelectedSorted = (next: string[]) => setSelected(sortIntervals(next));
+export const revalidate = 0;
