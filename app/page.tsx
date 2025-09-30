@@ -110,8 +110,8 @@ function HomeClient() {
     const mainIv = selectedIntervals[0] ?? '5m';
     return (rows || [])
       .filter(r => (q ? r.symbol.includes(q) : true))
-      .filter(r => (filters.under30 ? ((r.rsiByIv[mainIv] ?? 50) < 30) : true))
-      .filter(r => (filters.over70 ? ((r.rsiByIv[mainIv] ?? 50) > 70) : true));
+      .filter(r => (filters.oversold ? ((r.rsiByIv[mainIv] ?? 50) < 30) : true))
+      .filter(r => (filters.overbought ? ((r.rsiByIv[mainIv] ?? 50) > 70) : true));
   }, [rows, search, filters, selectedIntervals]);
 
   const ordered = useMemo(() => {
