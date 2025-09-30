@@ -23,7 +23,13 @@ function Header({
     >
       <span className="inline-flex items-center gap-1">
         {label}
-        <span className={`opacity-70 ${active ? '' : 'invisible'}`}>{dir === 'asc' ? '▲' : '▼'}</span>
+        <span
+          className={`${
+            active ? 'text-black dark:text-white' : 'text-neutral-400'
+          } text-xs`}
+        >
+          {dir === 'asc' ? '▲' : '▼'}
+        </span>
       </span>
     </th>
   );
