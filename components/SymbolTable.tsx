@@ -1,50 +1,40 @@
 'use client';
-import Link from 'next/link';
-import { useRef } from 'react';
-import { useVirtualizer } from '@tanstack/react-virtual';
+import { useMemo } from 'react';
 
-export default function SymbolTable({ rows }: { rows: Array<{symbol:string; price:number; rsi:number|null; change24h:number}> }) {
-  const parentRef = useRef<HTMLDivElement | null>(null);
-  const rowVirtualizer = useVirtualizer({
-    count: rows.length,
-    getScrollElement: () => parentRef.current,
-    estimateSize: () => 44,
-    overscan: 10,
-  });
+type Row = { symbol: string; price: number; rsi: number | null; change24h: number };
 
-  const items = rowVirtualizer.getVirtualItems();
+export default function SymbolTable({ rows }: { rows?: Row[] }) {
+  const data: Row[] = useMemo(() => Array.isArray(rows) ? rows : [], [rows]);
 
   return (
-    <div className="rounded-xl border">
-      <div className="grid grid-cols-5 gap-2 border-b px-3 py-2 text-sm font-medium">
-        <div>Symbol</div>
-        <div className="text-right">Price</div>
-        <div className="text-right">RSI(14)</div>
-        <div className="text-right">24h %</div>
-        <div></div>
-      </div>
-      <div ref={parentRef} className="max-h-[70vh] overflow-auto">
-        <div style={{ height: rowVirtualizer.getTotalSize(), position: 'relative' }}>
-          {items.map(vi => {
-            const r = rows[vi.index];
-            return (
-              <div
-                key={vi.key}
-                className="grid grid-cols-5 gap-2 px-3 text-sm"
-                style={{ position: 'absolute', top: 0, left: 0, width: '100%', transform: `translateY(${vi.start}px)`, height: vi.size }}
-              >
-                <div className="py-2 font-mono">{r.symbol}</div>
-                <div className="py-2 text-right">{r.price?.toFixed(6)}</div>
-                <div className={`py-2 text-right ${r.rsi!=null && (r.rsi<30?'text-blue-500': r.rsi>70? 'text-red-500':'')}`}>{r.rsi?.toFixed(2) ?? '—'}</div>
-                <div className={`py-2 text-right ${r.change24h>0? 'text-emerald-600':'text-rose-600'}`}>{r.change24h.toFixed(2)}%</div>
-                <div className="py-2 text-right">
-                  <Link className="rounded border px-2 py-1" href={`/symbol/${r.symbol}`}>Chart</Link>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
+    <div className="overflow-auto rounded-lg border border-neutral-200 dark:border-neutral-800">
+      <table className="min-w-full text-sm">
+        <thead className="bg-neutral-50 dark:bg-neutral-900/50 sticky top-0">
+          <tr className="text-left">
+            <th className="px-3 py-2 w-40">Symbol</th>
+            <th className="px-3 py-2 w-32">Price</th>
+            <th className="px-3 py-2 w-32">RSI(14)</th>
+            <th className="px-3 py-2 w-28">24h %</th>
+          </tr>
+        </thead>
+        <tbody>
+          {data.map((r) => (
+            <tr key={r.symbol} className="border-t border-neutral-200 dark:border-neutral-800">
+              <td className="px-3 py-2 font-medium">{r.symbol}</td>
+              <td className="px-3 py-2">{r.price?.toFixed?.(4) ?? '—'}</td>
+              <td className="px-3 py-2">{r.rsi != null ? r.rsi.toFixed(2) : '—'}</td>
+              <td className="px-3 py-2">{isFinite(r.change24h) ? r.change24h.toFixed(2) + '%' : '—'}</td>
+            </tr>
+          ))}
+          {data.length === 0 && (
+            <tr>
+              <td className="px-3 py-6 text-center opacity-60" colSpan={4}>
+                Немає даних. Спробуйте оновити або змінити інтервал.
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
     </div>
   );
 }

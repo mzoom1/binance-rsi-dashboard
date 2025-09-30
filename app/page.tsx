@@ -28,14 +28,16 @@ function HomeClient() {
     queryFn: async () => {
       const res = await fetch(`/api/summary?interval=${interval}`);
       if (!res.ok) throw new Error(await res.text());
-      return res.json() as Promise<Row[]>;
+      // Очікуємо масив; якщо раптом прийде не масив — приведемо до []
+      const json = await res.json();
+      return Array.isArray(json) ? (json as Row[]) : [];
     },
     staleTime: 60_000,
     refetchOnWindowFocus: false,
   });
 
-  const filtered = useMemo(() => {
-    const list: Row[] = data ?? [];
+  const filtered = useMemo<Row[]>(() => {
+    const list: Row[] = Array.isArray(data) ? data : [];
     const q = search.trim().toUpperCase();
     return list
       .filter(r => (q ? r.symbol.includes(q) : true))
