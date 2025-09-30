@@ -2,67 +2,71 @@ export const preferredRegion = ['fra1','cdg1','arn1'];
 export const runtime = 'nodejs';
 
 import { NextResponse } from 'next/server';
-import { get24hTicker, getKlines } from '@/lib/binance';
+import { get24hTicker, listSpotSymbols, getKlines } from '@/lib/binance';
 import { rsi } from '@/lib/rsi';
 
-const SEED = [
+const FALLBACK = [
   "BTCUSDT","ETHUSDT","BNBUSDT","SOLUSDT","XRPUSDT",
   "DOGEUSDT","ADAUSDT","TRXUSDT","TONUSDT","LINKUSDT"
 ];
 
 export async function GET(req: Request) {
   const t0 = Date.now();
-  const { searchParams } = new URL(req.url);
-  const interval = searchParams.get('interval') || '1h';
-  const debug = searchParams.get('debug') === '1';
+  try {
+    const { searchParams } = new URL(req.url);
+    const interval = searchParams.get('interval') || '1h';
+    const quote = (searchParams.get('quote') || 'USDT') as 'USDT'|'USDC'|'BUSD'|'ALL';
+    const offset = Math.max(0, Number(searchParams.get('offset') ?? 0));
+    const limit = Math.min(500, Math.max(10, Number(searchParams.get('limit') ?? 200)));
 
-  const symbols = SEED; // <- фіксований список, щоб UI ожив
-  const out:any[] = [];
-  const errors:any[] = [];
-
-  // обережна паралельність
-  const CONC = 3;
-  let i = 0;
-
-  await Promise.all(Array.from({length:CONC}).map(async () => {
-    while (i < symbols.length) {
-      const sym = symbols[i++];
-      try {
-        // тягнемо klines обов'язково; ticker опціонально
-        const kl = await getKlines(sym, interval, 200);
-        if (!Array.isArray(kl) || kl.length === 0) {
-          throw new Error('empty klines');
-        }
-        const closes = kl.map(k=>k.close);
-        const rs = rsi(closes, 14);
-        const lastRsi = Number.isFinite(rs.at(-1)!) ? rs.at(-1)! : null;
-
-        let price: number | null = closes.at(-1) ?? null;
-        let change24h: number | null = null;
-        try {
-          const t24 = await get24hTicker(sym);
-          price = t24?.lastPrice ?? price;
-          change24h = t24?.priceChangePercent ?? null;
-        } catch (e:any) {
-          // не падаємо якщо тикер недоступний
-          errors.push({ sym, msg:'ticker fail', err:String(e?.message||e) });
-        }
-
-        out.push({ symbol: sym, price, rsi: lastRsi, change24h });
-      } catch (e:any) {
-        errors.push({ sym, msg:String(e?.message||e) });
-      }
+    // 1) символи
+    let syms = await listSpotSymbols(quote);
+    if (!Array.isArray(syms) || syms.length === 0) {
+      syms = FALLBACK.map(s => ({ symbol: s, baseAsset: s.replace(/USDT$/,''), quoteAsset: 'USDT' }));
     }
-  }));
+    const total = syms.length;
 
-  out.sort((a,b)=> a.symbol.localeCompare(b.symbol));
-  const meta = { tookMs: Date.now()-t0, ok: out.length, fail: errors.length };
+    // 2) сторінка
+    const slice = syms.slice(offset, offset + limit).map(s => s.symbol);
 
-  // лог у рантаймі
-  console.log('summary.result', { ...meta, sampleFail: errors[0] });
+    // 3) конвеєр: обережна паралельність
+    const CONC = 8;
+    const rows:any[] = [];
+    const errors:any[] = [];
+    let i = 0;
 
-  if (debug) {
-    return NextResponse.json({ meta, out, errors });
+    await Promise.all(Array.from({length:CONC}).map(async () => {
+      while (i < slice.length) {
+        const sym = slice[i++];
+        try {
+          const [kl, t24] = await Promise.all([
+            getKlines(sym, interval, 200),
+            get24hTicker(sym).catch(() => null), // не валимося, якщо тикер упав
+          ]);
+          if (!Array.isArray(kl) || kl.length === 0) throw new Error('empty klines');
+          const closes = kl.map(k => k.close);
+          const r = rsi(closes, 14);
+          rows.push({
+            symbol: sym,
+            price: t24?.lastPrice ?? closes.at(-1) ?? null,
+            rsi: Number.isFinite(r.at(-1)!) ? r.at(-1) : null,
+            change24h: t24?.priceChangePercent ?? null,
+          });
+        } catch (e:any) {
+          errors.push({ sym, msg: String(e?.message || e) });
+        }
+      }
+    }));
+
+    rows.sort((a,b)=> a.symbol.localeCompare(b.symbol));
+    const nextOffset = offset + limit < total ? offset + limit : null;
+
+    const meta = { tookMs: Date.now() - t0, ok: rows.length, fail: errors.length, offset, limit, total };
+    if (errors.length) console.log('summary.partial', { ...meta, sampleFail: errors[0] });
+
+    return NextResponse.json({ rows, total, nextOffset, meta });
+  } catch (err:any) {
+    console.error('summary.error', err);
+    return NextResponse.json({ error: err.message }, { status: 500 });
   }
-  return NextResponse.json(out);
 }
