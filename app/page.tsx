@@ -27,6 +27,10 @@ function HomeClient() {
   const [rows, setRows] = useState<Row[]>([]);
   const [status, setStatus] = useState('Готово');
 
+  // новий стан сортування (за замовчуванням — спадання: від більшого RSI до меншого)
+  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
+  const toggleSort = () => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+
   async function fetchAllPages() {
     try {
       setRows([]);
@@ -48,7 +52,7 @@ function HomeClient() {
         if (json.nextOffset == null) break;
         offset = json.nextOffset;
         page++;
-        await new Promise(r => setTimeout(r, 150));
+        await new Promise((r) => setTimeout(r, 150));
       }
       setStatus('Готово');
     } catch (e: any) {
@@ -56,15 +60,30 @@ function HomeClient() {
     }
   }
 
-  useEffect(() => { fetchAllPages(); }, [interval, market]);
+  useEffect(() => {
+    fetchAllPages();
+  }, [interval, market]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toUpperCase();
     return (rows || [])
-      .filter(r => (q ? r.symbol.includes(q) : true))
-      .filter(r => (filters.under30 ? (r.rsi ?? 50) < 30 : true))
-      .filter(r => (filters.over70 ? (r.rsi ?? 50) > 70 : true));
+      .filter((r) => (q ? r.symbol.includes(q) : true))
+      .filter((r) => (filters.under30 ? (r.rsi ?? 50) < 30 : true))
+      .filter((r) => (filters.over70 ? (r.rsi ?? 50) > 70 : true));
   }, [rows, search, filters]);
+
+  // сортування за RSI з урахуванням null (завжди внизу)
+  const ordered = useMemo(() => {
+    const arr = [...filtered];
+    arr.sort((a, b) => {
+      const ar = a.rsi, br = b.rsi;
+      if (ar == null && br == null) return 0;
+      if (ar == null) return 1; // null вниз
+      if (br == null) return -1;
+      return sortDir === 'asc' ? ar - br : br - ar;
+    });
+    return arr;
+  }, [filtered, sortDir]);
 
   return (
     <div className="space-y-4">
@@ -73,13 +92,17 @@ function HomeClient() {
         <span className="text-sm opacity-70">{status}</span>
       </div>
       <Controls
-        interval={interval} setInterval={setInterval}
-        search={search} setSearch={setSearch}
-        filters={filters} setFilters={setFilters}
+        interval={interval}
+        setInterval={setInterval}
+        search={search}
+        setSearch={setSearch}
+        filters={filters}
+        setFilters={setFilters}
         onRefresh={fetchAllPages}
-        market={market} setMarket={setMarket}
+        market={market}
+        setMarket={setMarket}
       />
-      <SymbolTable rows={filtered} />
+      <SymbolTable rows={ordered} sortDir={sortDir} onToggleSort={toggleSort} />
     </div>
   );
 }

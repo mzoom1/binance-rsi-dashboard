@@ -1,43 +1,44 @@
 'use client';
 
-type Row = {
-  symbol: string;
-  price: number | null;
-  rsi: number | null;
-  change24h: number | null;
-};
+export type Row = { symbol: string; price: number | null; rsi: number | null; change24h: number | null };
 
-export default function SymbolTable({ rows }: { rows: Row[] }) {
-  const data = Array.isArray(rows) ? rows : [];
-
+export default function SymbolTable({
+  rows,
+  sortDir,
+  onToggleSort,
+}: {
+  rows: Row[];
+  sortDir: 'asc' | 'desc';
+  onToggleSort: () => void;
+}) {
   return (
-    <div className="w-full overflow-x-auto rounded-xl border border-neutral-200 dark:border-neutral-800">
-      <table className="w-full text-left text-sm">
-        <thead className="bg-neutral-50 dark:bg-neutral-900">
-          <tr className="text-xs uppercase text-neutral-500">
-            <th className="px-3 py-2">Symbol</th>
-            <th className="px-3 py-2">Price</th>
-            <th className="px-3 py-2">RSI(14)</th>
-            <th className="px-3 py-2">24h %</th>
+    <div className="overflow-x-auto rounded-lg border border-neutral-200 dark:border-neutral-800">
+      <table className="w-full text-sm">
+        <thead className="bg-neutral-50 dark:bg-neutral-900/50">
+          <tr className="text-left">
+            <th className="px-3 py-2 w-[160px]">Symbol</th>
+            <th className="px-3 py-2 w-[160px]">Price</th>
+            <th className="px-3 py-2 w-[160px] cursor-pointer select-none" onClick={onToggleSort} title="Сортувати за RSI">
+              <span className="inline-flex items-center gap-1">
+                RSI(14)
+                <span className="opacity-70">{sortDir === 'asc' ? '▲' : '▼'}</span>
+              </span>
+            </th>
+            <th className="px-3 py-2 w-[120px]">24h %</th>
           </tr>
         </thead>
-        <tbody className="divide-y divide-neutral-200 dark:divide-neutral-800">
-          {data.map((r) => (
-            <tr key={r.symbol} className="hover:bg-neutral-50 dark:hover:bg-neutral-900/60">
+        <tbody>
+          {rows.map((r) => (
+            <tr key={r.symbol} className="border-t border-neutral-200 dark:border-neutral-800">
               <td className="px-3 py-2 font-medium">{r.symbol}</td>
+              <td className="px-3 py-2">{r.price?.toFixed?.(4) ?? '—'}</td>
+              <td className="px-3 py-2">{r.rsi != null ? r.rsi.toFixed(2) : '—'}</td>
               <td className="px-3 py-2">
-                {Number.isFinite(r.price as number) ? (r.price as number).toFixed(4) : '—'}
-              </td>
-              <td className="px-3 py-2">
-                {Number.isFinite(r.rsi as number) ? (r.rsi as number).toFixed(2) : '—'}
-              </td>
-              <td className="px-3 py-2">
-                {Number.isFinite(r.change24h as number) ? ((r.change24h as number).toFixed(2) + '%') : '—'}
+                {Number.isFinite(r.change24h as number) ? (r.change24h as number).toFixed(2) + '%' : '—'}
               </td>
             </tr>
           ))}
-
-          {data.length === 0 && (
+          {rows.length === 0 && (
             <tr>
               <td className="px-3 py-6 text-center opacity-60" colSpan={4}>
                 Немає даних. Спробуйте оновити або змінити інтервал.
