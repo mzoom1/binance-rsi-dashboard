@@ -88,3 +88,13 @@ export default function Controls({
     </div>
   );
 }
+
+// toggle для ввімкнення/вимкнення інтервалів
+function toggle(iv: string) {
+  setSelected(prev => {
+    const next = prev.includes(iv)
+      ? prev.filter(x => x !== iv)
+      : [...prev, iv];
+    return sortIntervals(next).slice(0, 4);
+  });
+}
