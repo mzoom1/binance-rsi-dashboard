@@ -1,13 +1,10 @@
+'use client';
+export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 
-import TestClient from './components/TestClient';
+import { useEffect, useMemo, useState } from 'react';
+import Dashboard from '@/components/Dashboard';
 
 export default function Page() {
-  return (
-    <div>
-      <h1>Ping / (server + client)</h1>
-      <p>SSR працює, нижче client component:</p>
-      <TestClient />
-    </div>
-  );
+  return <Dashboard />;
 }
