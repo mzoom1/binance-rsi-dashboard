@@ -1,81 +1,90 @@
 'use client';
-import React, { Dispatch, SetStateAction } from 'react';
+import { Dispatch, SetStateAction } from 'react';
 
-const intervals = ['1m','3m','5m','15m','30m','1h','2h','4h','6h','8h','12h','1d','3d','1w','1M'] as const;
-export type Market = 'spot' | 'futures';
+export const intervals = [
+  '1m','3m','5m','15m','30m','1h','2h','4h','6h','8h','12h','1d','3d','1w','1M'
+];
 
-type ControlsProps = {
-  interval: string;
-  setInterval: Dispatch<SetStateAction<string>>;
+type Market = 'spot' | 'futures';
+
+export default function Controls({
+  market, setMarket,
+  selected, setSelected,
+  search, setSearch,
+  filters, setFilters,
+  onRefresh,
+}: {
+  market: Market;
+  setMarket: Dispatch<SetStateAction<Market>>;
+  selected: string[]; // обрані інтервали (до 4)
+  setSelected: Dispatch<SetStateAction<string[]>>;
   search: string;
   setSearch: Dispatch<SetStateAction<string>>;
   filters: { under30: boolean; over70: boolean };
   setFilters: Dispatch<SetStateAction<{ under30: boolean; over70: boolean }>>;
   onRefresh: () => void;
-  market: Market;
-  setMarket: Dispatch<SetStateAction<Market>>;
-};
+}) {
+  const toggleInterval = (iv: string) => {
+    setSelected(prev => {
+      const has = prev.includes(iv);
+      if (has) return prev.filter(x => x !== iv);
+      if (prev.length >= 4) return prev; // максимум 4
+      return [...prev, iv];
+    });
+  };
 
-export default function Controls({
-  interval,
-  setInterval,
-  search,
-  setSearch,
-  filters,
-  setFilters,
-  onRefresh,
-  market,
-  setMarket,
-}: ControlsProps) {
   return (
     <div className="flex flex-wrap items-center gap-3">
+      {/* Market */}
       <select
-        value={interval}
-        onChange={(e) => setInterval(e.target.value)}
-        className="rounded-md border px-2 py-1"
-      >
-        {intervals.map((iv) => (
-          <option key={iv} value={iv}>{iv}</option>
-        ))}
-      </select>
-
-      <select
+        className="px-2 py-1 border rounded-md"
         value={market}
-        onChange={(e) => setMarket(e.target.value as Market)}
-        className="rounded-md border px-2 py-1"
+        onChange={(e)=>setMarket(e.target.value as Market)}
+        title="Ринок"
       >
         <option value="spot">Spot</option>
         <option value="futures">Futures</option>
       </select>
 
+      {/* Multi-interval chips */}
+      <div className="flex flex-wrap gap-2">
+        {intervals.map(iv => {
+          const active = selected.includes(iv);
+          return (
+            <button
+              key={iv}
+              type="button"
+              onClick={()=>toggleInterval(iv)}
+              className={`px-2 py-1 rounded text-sm border ${
+                active ? 'bg-neutral-900 text-white border-neutral-900' : 'hover:bg-neutral-100 dark:hover:bg-neutral-800'
+              }`}
+              title="Натисніть, щоб додати/прибрати у вибір (до 4)"
+            >
+              {iv}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Search */}
       <input
+        placeholder="Пошук символу (BTCUSDT)…"
+        className="px-3 py-1 border rounded-md min-w-[220px]"
         value={search}
-        onChange={(e) => setSearch(e.target.value)}
-        placeholder="Пошук символу (BTCUSDT)"
-        className="min-w-[220px] rounded-md border px-3 py-1"
+        onChange={(e)=>setSearch(e.target.value)}
       />
 
-      <label className="flex items-center gap-1 text-sm">
-        <input
-          type="checkbox"
-          checked={filters.under30}
-          onChange={(e) => setFilters((f) => ({ ...f, under30: e.target.checked }))}
-        />
-        RSI &lt; 30
+      {/* Filters */}
+      <label className="inline-flex items-center gap-1">
+        <input type="checkbox" checked={filters.under30} onChange={(e)=>setFilters(s=>({...s, under30:e.target.checked}))}/>
+        <span>RSI &lt; 30</span>
+      </label>
+      <label className="inline-flex items-center gap-1">
+        <input type="checkbox" checked={filters.over70} onChange={(e)=>setFilters(s=>({...s, over70:e.target.checked}))}/>
+        <span>RSI &gt; 70</span>
       </label>
 
-      <label className="flex items-center gap-1 text-sm">
-        <input
-          type="checkbox"
-          checked={filters.over70}
-          onChange={(e) => setFilters((f) => ({ ...f, over70: e.target.checked }))}
-        />
-        RSI &gt; 70
-      </label>
-
-      <button onClick={onRefresh} className="rounded-md border px-3 py-1">
-        Оновити
-      </button>
+      <button className="px-3 py-1 border rounded-md" onClick={onRefresh}>Оновити</button>
     </div>
   );
 }
