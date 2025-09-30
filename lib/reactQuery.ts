@@ -10,7 +10,6 @@ export const queryClient = new QueryClient({
       refetchOnMount: false,
       staleTime: 60 * 1000,   // 1 хвилина вважаємо "свіжими"
       gcTime: 60 * 60 * 1000, // тримаємо в кеші до 60 хв
-      keepPreviousData: true,
       throwOnError: false,
       networkMode: 'always',
     },
