@@ -1,38 +1,37 @@
 /**
- * Обчислення RSI (Relative Strength Index, Wilder’s method).
- * @param closes масив цін закриття
- * @param period період RSI (звичайно 14)
+ * Wilder's RSI. Повертає number[]; на перших (period) індексах — NaN.
  */
 export function rsi(closes: number[], period = 14): number[] {
-  const out: (number | null)[] = new Array(closes.length).fill(null);
-  if (closes.length < period + 1) return out;
+  const n = closes.length;
+  const out = new Array<number>(n).fill(NaN);
+  if (n < period + 1) return out;
 
-  let gains = 0;
-  let losses = 0;
+  let gainSum = 0;
+  let lossSum = 0;
 
-  // перший період
+  // Початкове вікно
   for (let i = 1; i <= period; i++) {
-    const diff = closes[i] - closes[i - 1];
-    if (diff >= 0) gains += diff;
-    else losses -= diff;
+    const d = closes[i] - closes[i - 1];
+    if (d >= 0) gainSum += d;
+    else lossSum -= d;
   }
 
-  let avgGain = gains / period;
-  let avgLoss = losses / period;
+  let avgGain = gainSum / period;
+  let avgLoss = lossSum / period;
 
-  out[period] = avgLoss === 0 ? 100 : 100 - (100 / (1 + avgGain / avgLoss));
+  out[period] = avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss);
 
-  // далі по методу Вайлдера
-  for (let i = period + 1; i < closes.length; i++) {
-    const diff = closes[i] - closes[i - 1];
-    const gain = diff > 0 ? diff : 0;
-    const loss = diff < 0 ? -diff : 0;
+  // Подальші значення (метод Вайлдера)
+  for (let i = period + 1; i < n; i++) {
+    const d = closes[i] - closes[i - 1];
+    const gain = d > 0 ? d : 0;
+    const loss = d < 0 ? -d : 0;
 
     avgGain = (avgGain * (period - 1) + gain) / period;
     avgLoss = (avgLoss * (period - 1) + loss) / period;
 
-    out[i] = avgLoss === 0 ? 100 : 100 - (100 / (1 + avgGain / avgLoss));
+    out[i] = avgLoss === 0 ? 100 : 100 - 100 / (1 + avgGain / avgLoss);
   }
 
-  return out as number[];
+  return out;
 }
