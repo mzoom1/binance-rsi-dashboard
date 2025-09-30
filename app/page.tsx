@@ -1,4 +1,5 @@
 'use client';
+import { sortIntervals } from '@/lib/intervals';
 import { useMemo, useState, useEffect } from 'react';
 type Filters = { oversold: boolean; overbought: boolean };
 
