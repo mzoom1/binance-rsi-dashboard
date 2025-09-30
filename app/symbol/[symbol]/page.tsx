@@ -1,4 +1,6 @@
 'use client';
+export const dynamic = 'force-dynamic';
+export const revalidate = 0;
 import { useState } from 'react';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
 import KlineChart from '@/components/KlineChart';
