@@ -1,6 +1,7 @@
 'use client';
 import { useMemo, useState, useEffect } from 'react';
-import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { useQueries } from '@tanstack/react-query';
+import { PersistQueryClientProvider, queryClient, persister } from '@/lib/reactQuery';
 import Controls from '@/components/Controls';
 import SymbolTable, { type RowMulti, type SortKey, type SortDir } from '@/components/SymbolTable';
 
@@ -8,31 +9,25 @@ type Market = 'spot' | 'futures';
 type SummaryRow = { symbol: string; price: number | null; rsi: number | null; change24h: number | null };
 type SummaryResp = { rows: SummaryRow[]; total: number; nextOffset: number | null; meta: any };
 
-const qc = new QueryClient();
-
 export default function Page() {
   return (
-    <QueryClientProvider client={qc}>
+    <PersistQueryClientProvider client={queryClient} persistOptions={{ persister, maxAge: 1000 * 60 * 60 }}>
       <HomeClient />
-    </QueryClientProvider>
+    </PersistQueryClientProvider>
   );
 }
 
 function HomeClient() {
   const [market, setMarket] = useState<Market>('spot');
   const [selectedIntervals, setSelected] = useState<string[]>(['5m','15m','1h','4h']);
-
   const [search, setSearch] = useState('');
   const [filters, setFilters] = useState<{ under30: boolean; over70: boolean }>({ under30: false, over70: false });
 
-  const [rows, setRows] = useState<RowMulti[]>([]);
   const [status, setStatus] = useState('Готово');
 
-  // сортування: ключ може бути 'symbol'|'price'|'change24h' або 'rsi:<iv>'
+  // сортування: 'symbol' | 'price' | 'change24h' | 'rsi:<interval>'
   const [sortKey, setSortKey] = useState<SortKey>('rsi:5m');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
-
-  // якщо прибрали інтервал, за яким сортуємо — перемикаємося на перший наявний
   useEffect(() => {
     if (sortKey.startsWith('rsi:')) {
       const iv = sortKey.slice(4);
@@ -42,73 +37,71 @@ function HomeClient() {
       }
     }
   }, [selectedIntervals, sortKey]);
-
   const onSort = (key: SortKey) => {
-    if (key === sortKey) {
-      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
-    } else {
-      setSortKey(key);
-      setSortDir(key === 'symbol' ? 'asc' : 'desc');
-    }
+    if (key === sortKey) setSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    else { setSortKey(key); setSortDir(key === 'symbol' ? 'asc' : 'desc'); }
   };
 
-  async function fetchSummary(interval: string): Promise<SummaryRow[]> {
+  // Фетчер сторінок для одного інтервалу (батчить сторінки, але сам запит кешується по інтервалу)
+  async function fetchSummaryAllPages(interval: string): Promise<SummaryRow[]> {
     const pageSize = 200;
     let offset = 0;
-    let page = 1;
     let all: SummaryRow[] = [];
     for (;;) {
-      setStatus(`Завантаження ${interval}, стор. ${page}… (${market})`);
       const url = `/api/summary?market=${market}&interval=${interval}&offset=${offset}&limit=${pageSize}`;
       const res = await fetch(url, { cache: 'no-store' });
       if (!res.ok) throw new Error(await res.text());
       const json: SummaryResp = await res.json();
-      const chunk = Array.isArray(json?.rows) ? json.rows : [];
-      all = all.concat(chunk);
+      all = all.concat(Array.isArray(json?.rows) ? json.rows : []);
       if (json.nextOffset == null) break;
       offset = json.nextOffset;
-      page++;
-      await new Promise((r) => setTimeout(r, 120));
+      await new Promise(r => setTimeout(r, 120));
     }
     return all;
   }
 
-  async function loadAll() {
-    try {
-      setRows([]);
-      if (selectedIntervals.length === 0) return;
-      setStatus('Старт паралельного завантаження…');
-      const results = await Promise.all(selectedIntervals.map(iv => fetchSummary(iv)));
-      const map = new Map<string, RowMulti>();
-      for (let i = 0; i < selectedIntervals.length; i++) {
-        const iv = selectedIntervals[i];
-        for (const r of results[i]) {
-          const prev = map.get(r.symbol);
-          if (!prev) {
-            map.set(r.symbol, {
-              symbol: r.symbol,
-              price: r.price,
-              change24h: r.change24h,
-              rsiByIv: { [iv]: r.rsi }
-            });
-          } else {
-            if (prev.price == null && r.price != null) prev.price = r.price;
-            if (prev.change24h == null && r.change24h != null) prev.change24h = r.change24h;
-            prev.rsiByIv[iv] = r.rsi;
-          }
+  // Кожен інтервал — окремий запит/кеш
+  const queries = useQueries({
+    queries: selectedIntervals.map(iv => ({
+      queryKey: ['summary', market, iv], // ключ НЕ змінюється при приховуванні — кеш стабільний
+      queryFn: () => fetchSummaryAllPages(iv),
+      placeholderData: (prev) => prev,   // показати старі дані, поки оновлюємо
+      staleTime: 60 * 1000,
+      gcTime: 60 * 60 * 1000,
+    })),
+  });
+
+  // Статус
+  useEffect(() => {
+    const anyLoading = queries.some(q => q.isLoading || q.isFetching);
+    setStatus(anyLoading ? 'Завантаження…' : 'Готово');
+  }, [queries]);
+
+  // Мерджимо по символу
+  const rows: RowMulti[] = useMemo(() => {
+    const map = new Map<string, RowMulti>();
+    for (let i = 0; i < selectedIntervals.length; i++) {
+      const iv = selectedIntervals[i];
+      const data = queries[i].data as SummaryRow[] | undefined;
+      if (!data) continue;
+      for (const r of data) {
+        const prev = map.get(r.symbol);
+        if (!prev) {
+          map.set(r.symbol, {
+            symbol: r.symbol,
+            price: r.price,
+            change24h: r.change24h,
+            rsiByIv: { [iv]: r.rsi },
+          });
+        } else {
+          if (prev.price == null && r.price != null) prev.price = r.price;
+          if (prev.change24h == null && r.change24h != null) prev.change24h = r.change24h;
+          prev.rsiByIv[iv] = r.rsi;
         }
       }
-      setRows(Array.from(map.values()));
-      setStatus('Готово');
-    } catch (e: any) {
-      setStatus('Помилка: ' + String(e?.message || e));
     }
-  }
-
-  useEffect(() => {
-    loadAll();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [market, JSON.stringify(selectedIntervals)]);
+    return Array.from(map.values());
+  }, [queries, selectedIntervals]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toUpperCase();
@@ -153,7 +146,7 @@ function HomeClient() {
         selected={selectedIntervals} setSelected={setSelected}
         search={search} setSearch={setSearch}
         filters={filters} setFilters={setFilters}
-        onRefresh={loadAll}
+        onRefresh={() => queries.forEach(q => q.refetch())}
       />
 
       <SymbolTable
