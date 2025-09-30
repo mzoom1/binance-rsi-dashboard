@@ -2,9 +2,8 @@
 import { useMemo, useState, useEffect } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import Controls from '@/components/Controls';
-import SymbolTable from '@/components/SymbolTable';
+import SymbolTable, { type Row, type SortKey, type SortDir } from '@/components/SymbolTable';
 
-type Row = { symbol: string; price: number | null; rsi: number | null; change24h: number | null };
 type Resp = { rows: Row[]; total: number; nextOffset: number | null; meta: any };
 type Market = 'spot' | 'futures';
 
@@ -27,9 +26,17 @@ function HomeClient() {
   const [rows, setRows] = useState<Row[]>([]);
   const [status, setStatus] = useState('Готово');
 
-  // новий стан сортування (за замовчуванням — спадання: від більшого RSI до меншого)
-  const [sortDir, setSortDir] = useState<'asc' | 'desc'>('desc');
-  const toggleSort = () => setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+  // універсальне сортування
+  const [sortKey, setSortKey] = useState<SortKey>('rsi');
+  const [sortDir, setSortDir] = useState<SortDir>('desc');
+  const onSort = (key: SortKey) => {
+    if (key === sortKey) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortKey(key);
+      setSortDir(key === 'symbol' ? 'asc' : 'desc'); // символи за замовч. по алфавіту
+    }
+  };
 
   async function fetchAllPages() {
     try {
@@ -72,18 +79,34 @@ function HomeClient() {
       .filter((r) => (filters.over70 ? (r.rsi ?? 50) > 70 : true));
   }, [rows, search, filters]);
 
-  // сортування за RSI з урахуванням null (завжди внизу)
   const ordered = useMemo(() => {
     const arr = [...filtered];
+    const dir = sortDir === 'asc' ? 1 : -1;
+
+    const numCmp = (a: number | null, b: number | null) => {
+      // null завжди вниз
+      if (a == null && b == null) return 0;
+      if (a == null) return 1;
+      if (b == null) return -1;
+      return a < b ? -1 : a > b ? 1 : 0;
+    };
+
     arr.sort((a, b) => {
-      const ar = a.rsi, br = b.rsi;
-      if (ar == null && br == null) return 0;
-      if (ar == null) return 1; // null вниз
-      if (br == null) return -1;
-      return sortDir === 'asc' ? ar - br : br - ar;
+      switch (sortKey) {
+        case 'symbol':
+          return dir * a.symbol.localeCompare(b.symbol);
+        case 'price':
+          return dir * numCmp(a.price, b.price);
+        case 'rsi':
+          return dir * numCmp(a.rsi, b.rsi);
+        case 'change24h':
+          return dir * numCmp(a.change24h, b.change24h);
+        default:
+          return 0;
+      }
     });
     return arr;
-  }, [filtered, sortDir]);
+  }, [filtered, sortKey, sortDir]);
 
   return (
     <div className="space-y-4">
@@ -102,7 +125,7 @@ function HomeClient() {
         market={market}
         setMarket={setMarket}
       />
-      <SymbolTable rows={ordered} sortDir={sortDir} onToggleSort={toggleSort} />
+      <SymbolTable rows={ordered} sortKey={sortKey} sortDir={sortDir} onSort={onSort} />
     </div>
   );
 }

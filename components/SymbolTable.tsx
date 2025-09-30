@@ -1,30 +1,74 @@
 'use client';
 
 export type Row = { symbol: string; price: number | null; rsi: number | null; change24h: number | null };
+export type SortKey = 'symbol' | 'price' | 'rsi' | 'change24h';
+export type SortDir = 'asc' | 'desc';
+
+function Header({
+  active,
+  dir,
+  label,
+  onClick,
+}: {
+  active: boolean;
+  dir: SortDir;
+  label: string;
+  onClick: () => void;
+}) {
+  return (
+    <th
+      className="px-3 py-2 w-[160px] cursor-pointer select-none"
+      onClick={onClick}
+      title="Натисніть для сортування"
+    >
+      <span className="inline-flex items-center gap-1">
+        {label}
+        <span className={`opacity-70 ${active ? '' : 'invisible'}`}>{dir === 'asc' ? '▲' : '▼'}</span>
+      </span>
+    </th>
+  );
+}
 
 export default function SymbolTable({
   rows,
+  sortKey,
   sortDir,
-  onToggleSort,
+  onSort,
 }: {
   rows: Row[];
-  sortDir: 'asc' | 'desc';
-  onToggleSort: () => void;
+  sortKey: SortKey;
+  sortDir: SortDir;
+  onSort: (key: SortKey) => void;
 }) {
   return (
     <div className="overflow-x-auto rounded-lg border border-neutral-200 dark:border-neutral-800">
       <table className="w-full text-sm">
         <thead className="bg-neutral-50 dark:bg-neutral-900/50">
           <tr className="text-left">
-            <th className="px-3 py-2 w-[160px]">Symbol</th>
-            <th className="px-3 py-2 w-[160px]">Price</th>
-            <th className="px-3 py-2 w-[160px] cursor-pointer select-none" onClick={onToggleSort} title="Сортувати за RSI">
-              <span className="inline-flex items-center gap-1">
-                RSI(14)
-                <span className="opacity-70">{sortDir === 'asc' ? '▲' : '▼'}</span>
-              </span>
-            </th>
-            <th className="px-3 py-2 w-[120px]">24h %</th>
+            <Header
+              label="Symbol"
+              active={sortKey === 'symbol'}
+              dir={sortDir}
+              onClick={() => onSort('symbol')}
+            />
+            <Header
+              label="Price"
+              active={sortKey === 'price'}
+              dir={sortDir}
+              onClick={() => onSort('price')}
+            />
+            <Header
+              label="RSI(14)"
+              active={sortKey === 'rsi'}
+              dir={sortDir}
+              onClick={() => onSort('rsi')}
+            />
+            <Header
+              label="24h %"
+              active={sortKey === 'change24h'}
+              dir={sortDir}
+              onClick={() => onSort('change24h')}
+            />
           </tr>
         </thead>
         <tbody>
