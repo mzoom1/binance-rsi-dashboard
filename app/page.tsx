@@ -1,10 +1,5 @@
 'use client';
-export const dynamic = 'force-dynamic';
-export const revalidate = 0;
-import { sortIntervals } from '@/lib/intervals';
 import { useMemo, useState, useEffect } from 'react';
-type Filters = { oversold: boolean; overbought: boolean };
-
 import { useQueries } from '@tanstack/react-query';
 import { PersistQueryClientProvider, queryClient, persister } from '@/lib/reactQuery';
 import Controls from '@/components/Controls';
@@ -26,7 +21,7 @@ function HomeClient() {
   const [market, setMarket] = useState<Market>('spot');
   const [selectedIntervals, setSelected] = useState<string[]>(['5m','15m','1h','4h']);
   const [search, setSearch] = useState('');
-  const [filters, setFilters] = useState<Filters>({ oversold: false, overbought: false });
+  const [filters, setFilters] = useState<{ under30: boolean; over70: boolean }>({ under30: false, over70: false });
 
   const [status, setStatus] = useState('Готово');
 
@@ -113,8 +108,8 @@ function HomeClient() {
     const mainIv = selectedIntervals[0] ?? '5m';
     return (rows || [])
       .filter(r => (q ? r.symbol.includes(q) : true))
-      .filter(r => (filters.oversold ? ((r.rsiByIv[mainIv] ?? 50) < 30) : true))
-      .filter(r => (filters.overbought ? ((r.rsiByIv[mainIv] ?? 50) > 70) : true));
+      .filter(r => (filters.under30 ? ((r.rsiByIv[mainIv] ?? 50) < 30) : true))
+      .filter(r => (filters.over70 ? ((r.rsiByIv[mainIv] ?? 50) > 70) : true));
   }, [rows, search, filters, selectedIntervals]);
 
   const ordered = useMemo(() => {
@@ -164,10 +159,3 @@ function HomeClient() {
     </div>
   );
 }
-
-// гарантовано впорядкований state
-const [selectedIntervals, setSelected] = useState<string[]>(
-  sortIntervals(['1h'])
-);
-
-const setSelectedSorted = (next: string[]) => setSelected(sortIntervals(next));
