@@ -20,8 +20,8 @@ export default function Page() {
 
 function HomeClient() {
   const [market, setMarket] = useState<Market>('spot');
-const orderedTFs = useMemo(() => sortIntervals(selectedIntervals), [selectedIntervals]);
   const [selectedIntervals, setSelected] = useState<string[]>(sortIntervals(['5m','15m','1h','4h']));
+  const orderedTFs = useMemo(() => sortIntervals(selectedIntervals), [selectedIntervals]);
 const setSelectedSorted = (next: string[]) => setSelected(sortIntervals(next));
   const [search, setSearch] = useState('');
   const [filters, setFilters] = useState<{ under30: boolean; over70: boolean }>({ under30: false, over70: false });
