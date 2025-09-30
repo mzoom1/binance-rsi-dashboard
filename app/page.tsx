@@ -4,6 +4,7 @@ import { useQueries } from '@tanstack/react-query';
 import { PersistQueryClientProvider, queryClient, persister } from '@/lib/reactQuery';
 import Controls from '@/components/Controls';
 import SymbolTable, { type RowMulti, type SortKey, type SortDir } from '@/components/SymbolTable';
+ import { sortIntervals } from '@/lib/intervals';
 
 type Market = 'spot' | 'futures';
 type SummaryRow = { symbol: string; price: number | null; rsi: number | null; change24h: number | null };
@@ -19,7 +20,9 @@ export default function Page() {
 
 function HomeClient() {
   const [market, setMarket] = useState<Market>('spot');
-  const [selectedIntervals, setSelected] = useState<string[]>(['5m','15m','1h','4h']);
+const orderedTFs = useMemo(() => sortIntervals(selectedIntervals), [selectedIntervals]);
+  const [selectedIntervals, setSelected] = useState<string[]>(sortIntervals(['5m','15m','1h','4h']));
+const setSelectedSorted = (next: string[]) => setSelected(sortIntervals(next));
   const [search, setSearch] = useState('');
   const [filters, setFilters] = useState<{ under30: boolean; over70: boolean }>({ under30: false, over70: false });
 
@@ -62,7 +65,7 @@ function HomeClient() {
 
   // Кожен інтервал — окремий запит/кеш
   const queries = useQueries({
-    queries: selectedIntervals.map(iv => ({
+    queries: orderedTFs.map(iv => ({
       queryKey: ['summary', market, iv], // ключ НЕ змінюється при приховуванні — кеш стабільний
       queryFn: () => fetchSummaryAllPages(iv),
       placeholderData: (prev: SummaryResp | undefined) => prev,   // показати старі дані, поки оновлюємо

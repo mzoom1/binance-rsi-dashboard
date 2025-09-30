@@ -1,9 +1,6 @@
 'use client';
 import { Dispatch, SetStateAction } from 'react';
-
-export const intervals = [
-  '1m','3m','5m','15m','30m','1h','2h','4h','6h','8h','12h','1d','3d','1w','1M'
-];
+ import { intervals, toggleInterval } from '@/lib/intervals';
 
 type Market = 'spot' | 'futures';
 
@@ -24,15 +21,6 @@ export default function Controls({
   setFilters: Dispatch<SetStateAction<{ under30: boolean; over70: boolean }>>;
   onRefresh: () => void;
 }) {
-  const toggleInterval = (iv: string) => {
-    setSelected(prev => {
-      const has = prev.includes(iv);
-      if (has) return prev.filter(x => x !== iv);
-      if (prev.length >= 4) return prev; // максимум 4
-      return [...prev, iv];
-    });
-  };
-
   return (
     <div className="flex flex-wrap items-center gap-3">
       {/* Market */}
@@ -54,7 +42,7 @@ export default function Controls({
             <button
               key={iv}
               type="button"
-              onClick={()=>toggleInterval(iv)}
+              onClick={()=>setSelected(prev => toggleInterval(prev, iv))}
               className={`px-2 py-1 rounded text-sm border ${
                 active ? 'bg-neutral-900 text-white border-neutral-900' : 'hover:bg-neutral-100 dark:hover:bg-neutral-800'
               }`}

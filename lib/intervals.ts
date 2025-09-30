@@ -4,20 +4,16 @@ export const intervals = [
   '1d','3d','1w','1M',
 ] as const;
 
-// Корисно мати точний тип, якщо знадобиться далі
-export type Interval = typeof intervals[number];
-
-// Робимо мапу з ключем string, щоб не сварився TS при sort порівнянні
 const rank = new Map<string, number>(intervals.map((iv, i) => [iv, i]));
 
-/** Повертає список інтервалів, відсортований у "порядку зростання" та без дублікатів */
+/** Сортує у порядку зростання та прибирає дублікати */
 export function sortIntervals(list: readonly string[]): string[] {
   return [...new Set(list)].sort(
     (a, b) => (rank.get(a) ?? 999) - (rank.get(b) ?? 999)
   );
 }
 
-/** Тогл інтервалу з обов'язковим впорядкуванням */
+/** Тогл інтервалу з обов’язковим впорядкуванням */
 export function toggleInterval(current: readonly string[], iv: string): string[] {
   return current.includes(iv)
     ? sortIntervals(current.filter(x => x !== iv))
