@@ -1,4 +1,3 @@
-cat > lib/binance.ts <<'EOF'
 import { memo } from "./cache";
 
 const HOSTS = [
@@ -48,8 +47,3 @@ export async function getKlines(symbol: string, interval: string, limit = 500){
     return arr.map((k:any[])=>({ time:k[0], open:+k[1], high:+k[2], low:+k[3], close:+k[4], volume:+k[5], closeTime:k[6] }));
   });
 }
-EOF
-
-git add lib/binance.ts
-git commit -m "feat: use binance.vision mirror + host rotation"
-git push
