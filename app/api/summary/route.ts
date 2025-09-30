@@ -2,11 +2,63 @@ export const preferredRegion = ['fra1','cdg1','arn1'];
 export const runtime = 'nodejs';
 
 import { NextResponse } from 'next/server';
-import { get24hTicker, listSymbols, getKlines, Market } from '@/lib/binance';
+import { get24hTicker, listSymbols, getKlines, type Market } from '@/lib/binance';
 import { rsi } from '@/lib/rsi';
+import { getJSON, setJSON } from '@/lib/redis';
 
-const SEED_SPOT = ["BTCUSDT","ETHUSDT","BNBUSDT","SOLUSDT","XRPUSDT"];
-const SEED_FUT  = ["BTCUSDT","ETHUSDT","BNBUSDT","SOLUSDT","XRPUSDT"]; // на ф’ючерсах назви такі самі
+type Row = { symbol: string; price: number|null; rsi: number|null; change24h: number|null };
+type Payload = { rows: Row[]; total: number; nextOffset: number|null; meta: any; ts: number };
+
+function ttls(interval: string) {
+  // свіжість і максимально допустимий вік
+  if (['1m','3m','5m','15m','30m'].includes(interval)) return { fresh: 30, stale: 300 };
+  if (['1h','2h','4h'].includes(interval)) return { fresh: 60, stale: 600 };
+  return { fresh: 120, stale: 1200 };
+}
+
+async function computePage(market: Market, interval: string, quote: 'USDT'|'USDC'|'BUSD'|'ALL', offset: number, limit: number) {
+  let syms = await listSymbols(market, quote);
+  const total = syms.length;
+  if (!Array.isArray(syms) || !total) {
+    syms = ['BTCUSDT','ETHUSDT','BNBUSDT','SOLUSDT','XRPUSDT'].map(s => ({ symbol:s, baseAsset:'', quoteAsset:'USDT' }));
+  }
+  let slice = syms.slice(offset, offset + limit).map(s => s.symbol);
+  if (slice.length === 0) slice = ['BTCUSDT','ETHUSDT','BNBUSDT','SOLUSDT','XRPUSDT'];
+
+  const CONC = 8;
+  let i = 0;
+  const rows: Row[] = [];
+  const errors: any[] = [];
+
+  await Promise.all(Array.from({length:CONC}).map(async () => {
+    while (i < slice.length) {
+      const sym = slice[i++];
+      try {
+        const [kl, t24] = await Promise.all([
+          getKlines(market, sym, interval, 200),
+          get24hTicker(market, sym).catch(() => null),
+        ]);
+        if (!Array.isArray(kl) || kl.length === 0) throw new Error('empty klines');
+        const closes = kl.map(k=>k.close);
+        const rs = rsi(closes, 14);
+        rows.push({
+          symbol: sym,
+          price: t24?.lastPrice ?? closes.at(-1) ?? null,
+          rsi: Number.isFinite(rs.at(-1)!) ? rs.at(-1) : null,
+          change24h: t24?.priceChangePercent ?? null,
+        });
+      } catch (e:any) {
+        errors.push({ sym, msg:String(e?.message||e) });
+      }
+    }
+  }));
+
+  rows.sort((a,b)=> a.symbol.localeCompare(b.symbol));
+  const nextOffset = offset + limit < total ? offset + limit : null;
+  const meta = { ok: rows.length, fail: errors.length, offset, limit, total };
+  if (errors.length) console.log('summary.partial', { interval, market, ...meta, sampleFail: errors[0] });
+  return { rows, total, nextOffset, meta } as const;
+}
 
 export async function GET(req: Request) {
   const t0 = Date.now();
@@ -17,55 +69,35 @@ export async function GET(req: Request) {
   const limit = Math.min(500, Math.max(10, Number(searchParams.get('limit') ?? 200)));
   const market = (searchParams.get('market') || 'spot') as Market;
 
-  try {
-    let syms = await listSymbols(market, quote);
-    if (!Array.isArray(syms) || syms.length === 0) {
-      const seed = market === 'futures' ? SEED_FUT : SEED_SPOT;
-      syms = seed.map(s => ({ symbol: s, baseAsset: s.replace(/USDT$/,''), quoteAsset: 'USDT' }));
+  const { fresh, stale } = ttls(interval);
+  const key = `sum:${market}:${interval}:${quote}:${offset}:${limit}`;
+  const now = Math.floor(Date.now()/1000);
+
+  // 1) пробуємо віддати кеш
+  const cached = await getJSON<Payload>(key);
+  if (cached) {
+    const age = now - (cached.ts || 0);
+    if (age <= fresh) {
+      // повністю свіжий
+      return NextResponse.json({ rows: cached.rows, total: cached.total, nextOffset: cached.nextOffset, meta: { ...cached.meta, cached: true, age, tookMs: Date.now()-t0 } });
     }
-    const total = syms.length;
-
-    let slice = syms.slice(offset, offset + limit).map(s => s.symbol);
-    if (slice.length === 0) {
-      slice = (market === 'futures' ? SEED_FUT : SEED_SPOT);
-    }
-
-    const CONC = 8;
-    const rows:any[] = [];
-    const errors:any[] = [];
-    let i = 0;
-
-    await Promise.all(Array.from({length:CONC}).map(async () => {
-      while (i < slice.length) {
-        const sym = slice[i++];
+    if (age <= stale) {
+      // віддаємо застарілий і запускаємо фон-оновлення (fire-and-forget)
+      (async () => {
         try {
-          const [kl, t24] = await Promise.all([
-            getKlines(market, sym, interval, 200),
-            get24hTicker(market, sym).catch(() => null),
-          ]);
-          if (!Array.isArray(kl) || kl.length === 0) throw new Error('empty klines');
-          const closes = kl.map(k=>k.close);
-          const r = rsi(closes, 14);
-          rows.push({
-            symbol: sym,
-            price: t24?.lastPrice ?? closes.at(-1) ?? null,
-            rsi: Number.isFinite(r.at(-1)!) ? r.at(-1) : null,
-            change24h: t24?.priceChangePercent ?? null,
-          });
-        } catch (e:any) {
-          errors.push({ sym, msg: String(e?.message || e) });
-        }
-      }
-    }));
-
-    rows.sort((a,b)=> a.symbol.localeCompare(b.symbol));
-    const nextOffset = offset + limit < total ? offset + limit : null;
-    const meta = { tookMs: Date.now()-t0, ok: rows.length, fail: errors.length, market, offset, limit, total };
-    if (errors.length) console.log('summary.partial', { ...meta, sampleFail: errors[0] });
-
-    return NextResponse.json({ rows, total, nextOffset, meta });
-  } catch (err:any) {
-    console.error('summary.error', err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
+          const freshData = await computePage(market, interval, quote, offset, limit);
+          const payload: Payload = { ...freshData, ts: Math.floor(Date.now()/1000), meta: { ...freshData.meta, revalidated: true } };
+          await setJSON(key, payload, stale);
+        } catch (e) {}
+      })();
+      return NextResponse.json({ rows: cached.rows, total: cached.total, nextOffset: cached.nextOffset, meta: { ...cached.meta, cached: true, stale: true, age, tookMs: Date.now()-t0 } });
+    }
+    // інакше — кеш занадто старий, перерахуємо синхронно нижче
   }
+
+  // 2) синхронний перерахунок і запис у Redis
+  const calc = await computePage(market, interval, quote, offset, limit);
+  const payload: Payload = { ...calc, ts: now, meta: { ...calc.meta, computed: true } };
+  await setJSON(key, payload, stale);
+  return NextResponse.json({ rows: payload.rows, total: payload.total, nextOffset: payload.nextOffset, meta: { ...payload.meta, cached:false, tookMs: Date.now()-t0 } });
 }
