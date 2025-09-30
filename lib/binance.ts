@@ -1,81 +1,118 @@
-import { memo } from "./cache";
+import LRUCache from 'lru-cache';
 
-const HOSTS = [
-  process.env.NEXT_PUBLIC_BINANCE_BASE || "https://api.binance.com",
-  "https://data-api.binance.vision",
-  "https://api1.binance.com",
-  "https://api2.binance.com",
-  "https://api3.binance.com",
-];
+export type Market = 'spot' | 'futures';
 
-const sleep = (ms:number)=>new Promise(r=>setTimeout(r, ms));
+type Kline = {
+  openTime: number;
+  time: number;
+  open: number;
+  high: number;
+  low: number;
+  close: number;
+  volume: number;
+  closeTime: number;
+};
 
-async function fetchWithRetry(path: string, init?: RequestInit, tries = 5): Promise<Response> {
-  let last:any;
-  for (let i=0;i<tries;i++){
-    const host = HOSTS[i % HOSTS.length];
-    try {
-      const res = await fetch(host + path, { ...init, cache:'no-store', next:{ revalidate:0 } });
-      if (res.status === 429) { await sleep(500*(i+1)); continue; }
-      if (!res.ok) throw new Error(await res.text());
-      // @ts-ignore
-      (res as any).__host = host;
-      return res;
-    } catch(e){ last=e; await sleep(300*(i+1)**2); }
+const cache = new LRUCache<string, any>({ max: 2000, ttl: 60_000 });
+
+function bases(market: Market) {
+  if (market === 'futures') {
+    const base = process.env.NEXT_PUBLIC_BINANCE_FAPI_BASE || 'https://fapi.binance.com';
+    return [base, 'https://fapi1.binance.com', 'https://fapi2.binance.com', 'https://fapi3.binance.com'];
   }
-  throw last ?? new Error('fetch failed');
+  const base = process.env.NEXT_PUBLIC_BINANCE_BASE || 'https://api.binance.com';
+  return [base, 'https://api1.binance.com', 'https://api2.binance.com', 'https://api3.binance.com', 'https://data-api.binance.vision'];
 }
 
-export type SpotSymbol = { symbol:string; baseAsset:string; quoteAsset:string };
+function apiPrefix(market: Market) {
+  return market === 'futures' ? '/fapi/v1' : '/api/v3';
+}
 
-export async function listSpotSymbols(quote: 'ALL'|'USDT'|'USDC'|'BUSD'='USDT'): Promise<SpotSymbol[]> {
-  return memo(`symbols:${quote}`, 12*60*60*1000, async () => {
-    const res = await fetchWithRetry("/api/v3/exchangeInfo");
-    const json = await res.json();
-    let symbols: any[] = Array.isArray(json?.symbols) ? json.symbols : [];
+async function fetchWithRetryRaw(urls: string[], path: string, init?: RequestInit, attempts = 3) {
+  let lastErr: any;
+  for (let i = 0; i < Math.min(attempts, urls.length); i++) {
+    const u = urls[i] + path;
+    try {
+      const r = await fetch(u, { ...init, next: { revalidate: 0 } as any });
+      if (r.ok) return r;
+      lastErr = new Error(`HTTP ${r.status}`);
+    } catch (e) {
+      lastErr = e;
+    }
+  }
+  throw lastErr;
+}
 
-    // Якщо symbols порожні — пробуємо ще одне джерело (24hr ticker)
-    if (symbols.length === 0) {
-      try {
-        const r2 = await fetchWithRetry("/api/v3/ticker/24hr");
-        const t = await r2.json();
-        if (Array.isArray(t) && t.length) {
-          symbols = t.map((x:any) => {
-            const m = String(x.symbol).match(/^(.*?)(USDT|USDC|BUSD)$/);
-            return m ? { symbol:x.symbol, baseAsset:m[1], quoteAsset:m[2] } : { symbol:x.symbol, baseAsset:x.symbol, quoteAsset:'' };
-          });
-        }
-      } catch {}
+async function memo<T>(key: string, ttlMs: number, fn: () => Promise<T>): Promise<T> {
+  if (cache.has(key)) return cache.get(key) as T;
+  const val = await fn();
+  cache.set(key, val, { ttl: ttlMs });
+  return val;
+}
+
+/** Універсальний список символів (spot або USDT-perpetual futures) */
+export async function listSymbols(
+  market: Market,
+  quote: 'USDT' | 'USDC' | 'BUSD' | 'ALL' = 'USDT',
+): Promise<{ symbol: string; baseAsset: string; quoteAsset: string }[]> {
+  const key = `symbols:${market}:${quote}`;
+  return memo(key, 12 * 60 * 60 * 1000, async () => {
+    const bs = bases(market);
+    const pref = apiPrefix(market);
+    const res = await fetchWithRetryRaw(bs, `${pref}/exchangeInfo`, { cache: 'no-store' });
+    const j = await res.json();
+    const arr = Array.isArray(j?.symbols) ? j.symbols : [];
+
+    if (market === 'futures') {
+      return arr
+        .filter((s: any) => s.status === 'TRADING' && s.contractType === 'PERPETUAL')
+        .filter((s: any) => (quote === 'ALL' ? true : s.quoteAsset === quote))
+        .map((s: any) => ({ symbol: s.symbol, baseAsset: s.baseAsset, quoteAsset: s.quoteAsset }));
     }
 
-    const allowed = quote === "ALL" ? new Set(["USDT","USDC","BUSD"]) : new Set([quote]);
-
-    // Мінімальний фільтр: тільки TRADING і потрібний quote
-    return symbols
-      .filter((s:any)=> (s.status ? s.status === "TRADING" : true))
-      .filter((s:any)=> allowed.has(s.quoteAsset))
-      .map((s:any)=>({ symbol:s.symbol, baseAsset:s.baseAsset, quoteAsset:s.quoteAsset }));
+    return arr
+      .filter((s: any) => s.status === 'TRADING')
+      .filter((s: any) => (quote === 'ALL' ? true : s.quoteAsset === quote))
+      .map((s: any) => ({ symbol: s.symbol, baseAsset: s.baseAsset, quoteAsset: s.quoteAsset }));
   });
 }
 
-export async function getKlines(symbol: string, interval: string, limit = 500){
-  const key = `klines:${symbol}:${interval}:${limit}`;
+/** Klines: (market, symbol, interval, limit?) */
+export async function getKlines(
+  market: Market,
+  symbol: string,
+  interval: string,
+  limit: number = 200,
+): Promise<Kline[]> {
+  const key = `klines:${market}:${symbol}:${interval}:${limit}`;
   return memo(key, 60_000, async () => {
-    const res = await fetchWithRetry(`/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`);
+    const bs = bases(market);
+    const pref = apiPrefix(market);
+    const res = await fetchWithRetryRaw(bs, `${pref}/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`);
     const arr = await res.json();
-    return (Array.isArray(arr)?arr:[]).map((k:any[])=>({
-      openTime:k[0], time:k[0],
-      open:+k[1], high:+k[2], low:+k[3], close:+k[4],
-      volume:+k[5], closeTime:k[6]
+    return (Array.isArray(arr) ? arr : []).map((k: any[]) => ({
+      openTime: k[0],
+      time: k[0],
+      open: +k[1],
+      high: +k[2],
+      low: +k[3],
+      close: +k[4],
+      volume: +k[5],
+      closeTime: k[6],
     }));
   });
 }
 
-export async function get24hTicker(symbol: string){
-  const key = `ticker24h:${symbol}`;
+/** 24h тикер: (market, symbol) */
+export async function get24hTicker(market: Market, symbol: string) {
+  const key = `ticker24h:${market}:${symbol}`;
   return memo(key, 30_000, async () => {
-    const res = await fetchWithRetry(`/api/v3/ticker/24hr?symbol=${symbol}`);
+    const bs = bases(market);
+    const pref = apiPrefix(market);
+    const res = await fetchWithRetryRaw(bs, `${pref}/ticker/24hr?symbol=${symbol}`);
     const j = await res.json();
     return { symbol: j.symbol, lastPrice: +j.lastPrice, priceChangePercent: +j.priceChangePercent };
   });
 }
+
+export type { Kline };
