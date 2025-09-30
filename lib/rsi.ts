@@ -1,35 +1,38 @@
-/** Wilder's RSI implementation with EMA of gains/losses */
-export function rsi(values: number[], period = 14): (number | null)[] {
-  if (period <= 0) throw new Error('period must be > 0');
-  const n = values.length;
-  const out: (number|null)[] = new Array(n).fill(null);
-  if (n < period + 1) return out;
+/**
+ * Обчислення RSI (Relative Strength Index, Wilder’s method).
+ * @param closes масив цін закриття
+ * @param period період RSI (звичайно 14)
+ */
+export function rsi(closes: number[], period = 14): number[] {
+  const out: (number | null)[] = new Array(closes.length).fill(null);
+  if (closes.length < period + 1) return out;
 
-  const gains: number[] = new Array(n).fill(0);
-  const losses: number[] = new Array(n).fill(0);
+  let gains = 0;
+  let losses = 0;
 
-  for (let i = 1; i < n; i++) {
-    const delta = values[i] - values[i - 1];
-    gains[i] = Math.max(delta, 0);
-    losses[i] = Math.max(-delta, 0);
-  }
-
-  let avgGain = 0;
-  let avgLoss = 0;
+  // перший період
   for (let i = 1; i <= period; i++) {
-    avgGain += gains[i];
-    avgLoss += losses[i];
+    const diff = closes[i] - closes[i - 1];
+    if (diff >= 0) gains += diff;
+    else losses -= diff;
   }
-  avgGain /= period;
-  avgLoss /= period;
 
-  const ema = (prev: number, curr: number) => (prev * (period - 1) + curr) / period;
+  let avgGain = gains / period;
+  let avgLoss = losses / period;
 
-  for (let i = period + 1; i < n; i++) {
-    avgGain = ema(avgGain, gains[i]);
-    avgLoss = ema(avgLoss, losses[i]);
-    const rs = avgLoss === 0 ? Infinity : avgGain / avgLoss;
-    out[i] = 100 - 100 / (1 + rs);
+  out[period] = avgLoss === 0 ? 100 : 100 - (100 / (1 + avgGain / avgLoss));
+
+  // далі по методу Вайлдера
+  for (let i = period + 1; i < closes.length; i++) {
+    const diff = closes[i] - closes[i - 1];
+    const gain = diff > 0 ? diff : 0;
+    const loss = diff < 0 ? -diff : 0;
+
+    avgGain = (avgGain * (period - 1) + gain) / period;
+    avgLoss = (avgLoss * (period - 1) + loss) / period;
+
+    out[i] = avgLoss === 0 ? 100 : 100 - (100 / (1 + avgGain / avgLoss));
   }
-  return out;
+
+  return out as number[];
 }
