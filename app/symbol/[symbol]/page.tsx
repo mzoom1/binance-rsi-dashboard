@@ -1,3 +1,4 @@
+export const revalidate = 0;
 'use client';
 import { useState } from 'react';
 import { QueryClient, QueryClientProvider, useQuery } from '@tanstack/react-query';
