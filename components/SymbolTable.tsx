@@ -4,13 +4,13 @@ export type RowMulti = {
   symbol: string;
   price: number | null;
   change24h: number | null;
-  rsiByIv: Record<string, number | null>; // RSI по інтервалах
+  rsiByIv: Record<string, number | null>;
 };
 
-export type SortKey = 'symbol' | 'price' | 'change24h' | 'rsi'; // rsi = по головному інтервалу
+export type SortKey = 'symbol' | 'price' | 'change24h' | `rsi:${string}`;
 export type SortDir = 'asc' | 'desc';
 
-function Header({
+function SortHeader({
   active,
   dir,
   label,
@@ -22,7 +22,7 @@ function Header({
   onClick: () => void;
 }) {
   return (
-    <th className="px-3 py-2 w-[160px] cursor-pointer select-none" onClick={onClick}>
+    <th className="px-3 py-2 w-[140px] cursor-pointer select-none" onClick={onClick}>
       <span className="inline-flex items-center gap-1">
         {label}
         <span className={`${active ? 'text-black dark:text-white' : 'text-neutral-400'} text-xs`}>
@@ -39,28 +39,30 @@ export default function SymbolTable({
   sortDir,
   onSort,
   rsiColumns,
-  mainIv,
 }: {
   rows: RowMulti[];
   sortKey: SortKey;
   sortDir: SortDir;
   onSort: (key: SortKey) => void;
-  rsiColumns: string[];   // які інтервали показуємо як колонки
-  mainIv: string;         // головний для сортування
+  rsiColumns: string[];
 }) {
   return (
     <div className="overflow-x-auto rounded-lg border border-neutral-200 dark:border-neutral-800">
       <table className="w-full text-sm">
         <thead className="bg-neutral-50 dark:bg-neutral-900/50">
           <tr className="text-left">
-            <Header label="Symbol" active={sortKey==='symbol'} dir={sortDir} onClick={()=>onSort('symbol')}/>
-            <Header label="Price" active={sortKey==='price'} dir={sortDir} onClick={()=>onSort('price')}/>
+            <SortHeader label="Symbol" active={sortKey==='symbol'} dir={sortDir} onClick={()=>onSort('symbol')} />
+            <SortHeader label="Price" active={sortKey==='price'} dir={sortDir} onClick={()=>onSort('price')} />
             {rsiColumns.map(iv => (
-              <th key={iv} className="px-3 py-2 w-[120px]">
-                RSI({iv})
-              </th>
+              <SortHeader
+                key={iv}
+                label={`RSI(${iv})`}
+                active={sortKey===`rsi:${iv}`}
+                dir={sortKey===`rsi:${iv}` ? sortDir : 'desc'}
+                onClick={()=>onSort(`rsi:${iv}` as SortKey)}
+              />
             ))}
-            <Header label="24h %" active={sortKey==='change24h'} dir={sortDir} onClick={()=>onSort('change24h')}/>
+            <SortHeader label="24h %" active={sortKey==='change24h'} dir={sortDir} onClick={()=>onSort('change24h')} />
           </tr>
         </thead>
         <tbody>

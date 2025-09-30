@@ -21,7 +21,6 @@ export default function Page() {
 function HomeClient() {
   const [market, setMarket] = useState<Market>('spot');
   const [selectedIntervals, setSelected] = useState<string[]>(['5m','15m','1h','4h']);
-  const mainIv = selectedIntervals[0] ?? '5m';
 
   const [search, setSearch] = useState('');
   const [filters, setFilters] = useState<{ under30: boolean; over70: boolean }>({ under30: false, over70: false });
@@ -29,11 +28,25 @@ function HomeClient() {
   const [rows, setRows] = useState<RowMulti[]>([]);
   const [status, setStatus] = useState('Готово');
 
-  const [sortKey, setSortKey] = useState<SortKey>('rsi');
+  // сортування: ключ може бути 'symbol'|'price'|'change24h' або 'rsi:<iv>'
+  const [sortKey, setSortKey] = useState<SortKey>('rsi:5m');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
+
+  // якщо прибрали інтервал, за яким сортуємо — перемикаємося на перший наявний
+  useEffect(() => {
+    if (sortKey.startsWith('rsi:')) {
+      const iv = sortKey.slice(4);
+      if (!selectedIntervals.includes(iv)) {
+        const fallback = selectedIntervals[0] ?? '5m';
+        setSortKey(('rsi:' + fallback) as SortKey);
+      }
+    }
+  }, [selectedIntervals, sortKey]);
+
   const onSort = (key: SortKey) => {
-    if (key === sortKey) setSortDir(d=> d==='asc' ? 'desc' : 'asc');
-    else {
+    if (key === sortKey) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'));
+    } else {
       setSortKey(key);
       setSortDir(key === 'symbol' ? 'asc' : 'desc');
     }
@@ -55,7 +68,7 @@ function HomeClient() {
       if (json.nextOffset == null) break;
       offset = json.nextOffset;
       page++;
-      await new Promise(r => setTimeout(r, 120));
+      await new Promise((r) => setTimeout(r, 120));
     }
     return all;
   }
@@ -65,11 +78,7 @@ function HomeClient() {
       setRows([]);
       if (selectedIntervals.length === 0) return;
       setStatus('Старт паралельного завантаження…');
-
-      // Паралельно тягнемо всі обрані інтервали
       const results = await Promise.all(selectedIntervals.map(iv => fetchSummary(iv)));
-
-      // Мержимо по символу
       const map = new Map<string, RowMulti>();
       for (let i = 0; i < selectedIntervals.length; i++) {
         const iv = selectedIntervals[i];
@@ -83,7 +92,6 @@ function HomeClient() {
               rsiByIv: { [iv]: r.rsi }
             });
           } else {
-            // оновлюємо last known price/24h (беремо з першого присутнього), вішаємо RSI для цього інтервалу
             if (prev.price == null && r.price != null) prev.price = r.price;
             if (prev.change24h == null && r.change24h != null) prev.change24h = r.change24h;
             prev.rsiByIv[iv] = r.rsi;
@@ -92,7 +100,7 @@ function HomeClient() {
       }
       setRows(Array.from(map.values()));
       setStatus('Готово');
-    } catch (e:any) {
+    } catch (e: any) {
       setStatus('Помилка: ' + String(e?.message || e));
     }
   }
@@ -104,15 +112,16 @@ function HomeClient() {
 
   const filtered = useMemo(() => {
     const q = search.trim().toUpperCase();
+    const mainIv = selectedIntervals[0] ?? '5m';
     return (rows || [])
       .filter(r => (q ? r.symbol.includes(q) : true))
       .filter(r => (filters.under30 ? ((r.rsiByIv[mainIv] ?? 50) < 30) : true))
       .filter(r => (filters.over70 ? ((r.rsiByIv[mainIv] ?? 50) > 70) : true));
-  }, [rows, search, filters, mainIv]);
+  }, [rows, search, filters, selectedIntervals]);
 
   const ordered = useMemo(() => {
     const dir = sortDir === 'asc' ? 1 : -1;
-    const numCmp = (a: number | null | undefined, b: number | null | undefined) => {
+    const numCmp = (a?: number | null, b?: number | null) => {
       if (a == null && b == null) return 0;
       if (a == null) return 1;
       if (b == null) return -1;
@@ -120,16 +129,17 @@ function HomeClient() {
     };
     const arr = [...filtered];
     arr.sort((a,b)=>{
-      switch (sortKey) {
-        case 'symbol':   return dir * a.symbol.localeCompare(b.symbol);
-        case 'price':    return dir * numCmp(a.price, b.price);
-        case 'change24h':return dir * numCmp(a.change24h, b.change24h);
-        case 'rsi':      return dir * numCmp(a.rsiByIv[mainIv], b.rsiByIv[mainIv]);
-        default: return 0;
+      if (sortKey === 'symbol')   return dir * a.symbol.localeCompare(b.symbol);
+      if (sortKey === 'price')    return dir * numCmp(a.price, b.price);
+      if (sortKey === 'change24h')return dir * numCmp(a.change24h, b.change24h);
+      if (sortKey.startsWith('rsi:')) {
+        const iv = sortKey.slice(4);
+        return dir * numCmp(a.rsiByIv[iv], b.rsiByIv[iv]);
       }
+      return 0;
     });
     return arr;
-  }, [filtered, sortKey, sortDir, mainIv]);
+  }, [filtered, sortKey, sortDir]);
 
   return (
     <div className="space-y-4">
@@ -152,7 +162,6 @@ function HomeClient() {
         sortDir={sortDir}
         onSort={onSort}
         rsiColumns={selectedIntervals}
-        mainIv={mainIv}
       />
     </div>
   );
