@@ -1,6 +1,7 @@
 'use client';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
+export const dynamic = 'force-dynamic';
 import { sortIntervals } from '@/lib/intervals';
 import { useMemo, useState, useEffect } from 'react';
 type Filters = { oversold: boolean; overbought: boolean };
@@ -165,10 +166,3 @@ function HomeClient() {
   );
 }
 
-// гарантовано впорядкований state
-const [selectedIntervals, setSelected] = useState<string[]>(
-  sortIntervals(['1h'])
-);
-
-const setSelectedSorted = (next: string[]) => setSelected(sortIntervals(next));
-export const revalidate = 0;
