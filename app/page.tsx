@@ -1,5 +1,7 @@
 'use client';
 import { useMemo, useState, useEffect } from 'react';
+type Filters = { oversold: boolean; overbought: boolean };
+
 import { useQueries } from '@tanstack/react-query';
 import { PersistQueryClientProvider, queryClient, persister } from '@/lib/reactQuery';
 import Controls from '@/components/Controls';
@@ -21,7 +23,7 @@ function HomeClient() {
   const [market, setMarket] = useState<Market>('spot');
   const [selectedIntervals, setSelected] = useState<string[]>(['5m','15m','1h','4h']);
   const [search, setSearch] = useState('');
-  const [filters, setFilters] = useState<{ under30: boolean; over70: boolean }>({ under30: false, over70: false });
+  const [filters, setFilters] = useState<Filters>({ oversold: false, overbought: false });
 
   const [status, setStatus] = useState('Готово');
 
