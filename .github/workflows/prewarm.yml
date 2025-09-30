@@ -1,0 +1,19 @@
+name: Prewarm cache
+on:
+  schedule:
+    - cron: '*/5 * * * *'  # кожні 5 хвилин
+  workflow_dispatch:
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Call prewarm endpoints
+        run: |
+          set -e
+          BASE="${{ secrets.APP_BASE_URL }}"   # додайте у Secrets
+          curl -sS "$BASE/api/summary?market=spot&interval=5m&offset=0&limit=200" >/dev/null
+          curl -sS "$BASE/api/summary?market=spot&interval=15m&offset=0&limit=200" >/dev/null
+          curl -sS "$BASE/api/summary?market=spot&interval=1h&offset=0&limit=200" >/dev/null
+          curl -sS "$BASE/api/summary?market=futures&interval=5m&offset=0&limit=200" >/dev/null
+          # додайте ще сторінок/інтервалів за потреби
