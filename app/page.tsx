@@ -65,7 +65,7 @@ function HomeClient() {
     queries: selectedIntervals.map(iv => ({
       queryKey: ['summary', market, iv], // ключ НЕ змінюється при приховуванні — кеш стабільний
       queryFn: () => fetchSummaryAllPages(iv),
-      placeholderData: (prev) => prev,   // показати старі дані, поки оновлюємо
+      placeholderData: (prev: SummaryResp | undefined) => prev,   // показати старі дані, поки оновлюємо
       staleTime: 60 * 1000,
       gcTime: 60 * 60 * 1000,
     })),
