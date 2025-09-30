@@ -6,6 +6,7 @@ import SymbolTable from '@/components/SymbolTable';
 
 type Row = { symbol: string; price: number | null; rsi: number | null; change24h: number | null };
 type Resp = { rows: Row[]; total: number; nextOffset: number | null; meta: any };
+type Market = 'spot' | 'futures';
 
 const qc = new QueryClient();
 
@@ -19,6 +20,7 @@ export default function Page() {
 
 function HomeClient() {
   const [interval, setInterval] = useState<string>('5m');
+  const [market, setMarket] = useState<Market>('spot');
   const [search, setSearch] = useState('');
   const [filters, setFilters] = useState<{ under30: boolean; over70: boolean }>({ under30: false, over70: false });
 
@@ -35,17 +37,18 @@ function HomeClient() {
       let all: Row[] = [];
 
       for (;;) {
-        setStatus(`Сторінка ${page}…`);
-        const res = await fetch(`/api/summary?interval=${interval}&offset=${offset}&limit=${pageSize}`, { cache: 'no-store' });
+        setStatus(`Сторінка ${page}… (${market})`);
+        const url = `/api/summary?market=${market}&interval=${interval}&offset=${offset}&limit=${pageSize}`;
+        const res = await fetch(url, { cache: 'no-store' });
         if (!res.ok) throw new Error(await res.text());
         const json: Resp = await res.json();
         const chunk = Array.isArray(json?.rows) ? json.rows : [];
         all = all.concat(chunk);
-        setRows(all);               // проміжне оновлення в UI
+        setRows(all);
         if (json.nextOffset == null) break;
         offset = json.nextOffset;
         page++;
-        await new Promise(r => setTimeout(r, 150)); // невелика пауза — поважаємо rate limits
+        await new Promise(r => setTimeout(r, 150));
       }
       setStatus('Готово');
     } catch (e: any) {
@@ -53,7 +56,7 @@ function HomeClient() {
     }
   }
 
-  useEffect(() => { fetchAllPages(); }, [interval]);
+  useEffect(() => { fetchAllPages(); }, [interval, market]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toUpperCase();
@@ -70,13 +73,11 @@ function HomeClient() {
         <span className="text-sm opacity-70">{status}</span>
       </div>
       <Controls
-        interval={interval}
-        setInterval={setInterval}
-        search={search}
-        setSearch={setSearch}
-        filters={filters}
-        setFilters={setFilters}
+        interval={interval} setInterval={setInterval}
+        search={search} setSearch={setSearch}
+        filters={filters} setFilters={setFilters}
         onRefresh={fetchAllPages}
+        market={market} setMarket={setMarket}
       />
       <SymbolTable rows={filtered} />
     </div>
