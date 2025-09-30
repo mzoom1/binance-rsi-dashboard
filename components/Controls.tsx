@@ -1,3 +1,4 @@
+import { intervals, sortIntervals } from '@/lib/intervals';
 'use client';
 import { Dispatch, SetStateAction } from 'react';
 
