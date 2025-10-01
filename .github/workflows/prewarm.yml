@@ -1,19 +1,15 @@
 name: Prewarm RSI Cache
-
 on:
   schedule:
-    - cron: "*/5 * * * *"  # кожні 5 хв
+    - cron: "*/5 * * * *"
   workflow_dispatch:
-
 jobs:
-  hit-prewarm:
+  warm:
     runs-on: ubuntu-latest
     steps:
-      - name: Curl prewarm endpoint
+      - name: Call prewarm endpoint
         run: |
-          curl -fsS --max-time 20 \
-            "$VERCEL_BASE_URL/api/prewarm?token=$SECRET" \
-            -w "\nHTTP %{http_code}\n"
+          curl -fsS "$APP_BASE_URL/api/prewarm?token=$SECRET" -w "\nHTTP:%{http_code}\n"
         env:
-          VERCEL_BASE_URL: ${{ secrets.APP_BASE_URL }}
+          APP_BASE_URL: ${{ secrets.APP_BASE_URL }}
           SECRET: ${{ secrets.SECRET }}
