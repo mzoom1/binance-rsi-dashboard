@@ -1,5 +1,28 @@
 {
   "crons": [
-    { "path": "/api/prewarm", "schedule": "0 10 * * *" }
+    {
+      "path": "/api/prewarm?token=%PREWARM_SECRET%&interval=1m",
+      "schedule": "*/1 * * * *"
+    },
+    {
+      "path": "/api/prewarm?token=%PREWARM_SECRET%&interval=3m",
+      "schedule": "*/1 * * * *"
+    },
+    {
+      "path": "/api/prewarm?token=%PREWARM_SECRET%&interval=5m",
+      "schedule": "*/1 * * * *"
+    },
+    {
+      "path": "/api/prewarm?token=%PREWARM_SECRET%&interval=15m",
+      "schedule": "*/1 * * * *"
+    },
+    {
+      "path": "/api/prewarm?token=%PREWARM_SECRET%&interval=30m",
+      "schedule": "*/1 * * * *"
+    },
+    {
+      "path": "/api/prewarm?token=%PREWARM_SECRET%&interval=1h",
+      "schedule": "*/1 * * * *"
+    }
   ]
 }

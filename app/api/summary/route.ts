@@ -1,124 +1,25 @@
-export const preferredRegion = ['fra1','cdg1','arn1'];
 export const runtime = 'nodejs';
-
 import { NextResponse } from 'next/server';
-import { get24hTicker, listSymbols, getKlines, type Market } from '@/lib/binance';
-import { rsi } from '@/lib/rsi';
-import { getJSON, setJSON } from '@/lib/redis';
+import { getJSON } from '@/lib/redis';
+import type { Market } from '@/lib/binance';
 
-type Row = { symbol: string; price: number | null; rsi: number | null; change24h: number | null };
-type Payload = { rows: Row[]; total: number; nextOffset: number | null; meta: any; ts: number };
-const CACHE_HDR = { 'Cache-Control': 'public, s-maxage=30, stale-while-revalidate=600' };
-
-function ttls(interval: string) {
-  if (['1m','3m','5m','15m','30m'].includes(interval)) return { fresh: 30, stale: 300 };
-  if (['1h','2h','4h'].includes(interval)) return { fresh: 60, stale: 600 };
-  return { fresh: 120, stale: 1200 };
-}
-
-async function computePage(
-  market: Market,
-  interval: string,
-  quote: 'USDT' | 'USDC' | 'BUSD' | 'ALL',
-  offset: number,
-  limit: number
-) {
-  let syms = await listSymbols(market, quote);
-  const total = syms.length;
-  if (!Array.isArray(syms) || !total) {
-    syms = ['BTCUSDT','ETHUSDT','BNBUSDT','SOLUSDT','XRPUSDT'].map(s => ({ symbol:s, baseAsset:'', quoteAsset:'USDT' }));
-  }
-  let slice = syms.slice(offset, offset + limit).map(s => (typeof s === 'string' ? s : s.symbol));
-  if (slice.length === 0) slice = ['BTCUSDT','ETHUSDT','BNBUSDT','SOLUSDT','XRPUSDT'];
-
-  const CONC = 8;
-  let i = 0;
-  const rows: Row[] = [];
-  const errors: any[] = [];
-
-  await Promise.all(Array.from({length:CONC}).map(async () => {
-    while (i < slice.length) {
-      const sym = slice[i++];
-      try {
-        const [kl, t24] = await Promise.all([
-          getKlines(market, sym, interval, 200),
-          get24hTicker(market, sym).catch(() => null),
-        ]);
-        if (!Array.isArray(kl) || kl.length === 0) throw new Error('empty klines');
-
-        const closes = kl.map(k=>k.close);
-        const rs = rsi(closes, 14);
-
-        const lastClose = closes.at(-1);
-        const lastRsi = rs.at(-1);
-
-        const price: number | null =
-          typeof t24?.lastPrice === 'number' ? t24.lastPrice
-          : typeof lastClose === 'number' ? lastClose
-          : null;
-
-        const rsiVal: number | null =
-          typeof lastRsi === 'number' && Number.isFinite(lastRsi) ? lastRsi : null;
-
-        const ch24: number | null =
-          typeof t24?.priceChangePercent === 'number' ? t24.priceChangePercent : null;
-
-        rows.push({ symbol: sym, price, rsi: rsiVal, change24h: ch24 });
-      } catch (e:any) {
-        errors.push({ sym, msg:String(e?.message||e) });
-      }
-    }
-  }));
-
-  rows.sort((a,b)=> a.symbol.localeCompare(b.symbol));
-  const nextOffset = offset + limit < total ? offset + limit : null;
-  const meta = { ok: rows.length, fail: errors.length, offset, limit, total };
-  if (errors.length) console.log('summary.partial', { interval, market, ...meta, sampleFail: errors[0] });
-  return { rows, total, nextOffset, meta } as const;
-}
+type Payload = { rows: any[]; total: number; ts: number; meta: any };
 
 export async function GET(req: Request) {
-  const t0 = Date.now();
   const { searchParams } = new URL(req.url);
-  const interval = searchParams.get('interval') || '1h';
-  const quote = (searchParams.get('quote') || 'USDT') as 'USDT' | 'USDC' | 'BUSD' | 'ALL';
-  const offset = Math.max(0, Number(searchParams.get('offset') ?? 0));
-  const limit = Math.min(500, Math.max(10, Number(searchParams.get('limit') ?? 200)));
   const market = (searchParams.get('market') || 'spot') as Market;
+  const interval = searchParams.get('interval') || '15m';
+  const quote = (searchParams.get('quote') || 'USDT') as 'USDT';
 
-  const { fresh, stale } = ttls(interval);
-  const key = `sum:${market}:${interval}:${quote}:${offset}:${limit}`;
-  const now = Math.floor(Date.now()/1000);
-
+  const key = `sum:${market}:${interval}:${quote}`;
   const cached = await getJSON<Payload>(key);
-  if (cached) {
-    const age = now - (cached.ts || 0);
-    if (age <= fresh) {
-      return NextResponse.json(
-        { rows: cached.rows, total: cached.total, nextOffset: cached.nextOffset, meta: { ...cached.meta, cached: true, age, tookMs: Date.now()-t0 } },
-        { headers: CACHE_HDR }
-      );
-    }
-    if (age <= stale) {
-      (async () => {
-        try {
-          const freshData = await computePage(market, interval, quote, offset, limit);
-          const payload: Payload = { ...freshData, ts: Math.floor(Date.now()/1000), meta: { ...freshData.meta, revalidated: true } };
-          await setJSON(key, payload, stale);
-        } catch {}
-      })();
-      return NextResponse.json(
-        { rows: cached.rows, total: cached.total, nextOffset: cached.nextOffset, meta: { ...cached.meta, cached: true, stale: true, age, tookMs: Date.now()-t0 } },
-        { headers: CACHE_HDR }
-      );
-    }
-  }
 
-  const calc = await computePage(market, interval, quote, offset, limit);
-  const payload: Payload = { ...calc, ts: now, meta: { ...calc.meta, computed: true } };
-  await setJSON(key, payload, stale);
-  return NextResponse.json(
-    { rows: payload.rows, total: payload.total, nextOffset: payload.nextOffset, meta: { ...payload.meta, cached:false, tookMs: Date.now()-t0 } },
-    { headers: CACHE_HDR }
-  );
+  if (cached) {
+    return NextResponse.json({ ...cached, meta: { ...cached.meta, cached:true } });
+  }
+  // якщо вперше — повертаємо порожню відповідь, UI показує "prewarming..."
+  return NextResponse.json({
+    rows: [], total: 0, ts: Math.floor(Date.now()/1000),
+    meta: { market, interval, quote, cached:false, prewarming:true }
+  });
 }
