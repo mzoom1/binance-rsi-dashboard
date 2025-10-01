@@ -50,7 +50,7 @@ async function computePage(market: Market, interval: string, quote: 'USDT'|'USDC
         rows.push({
           symbol: sym,
           price: t24?.lastPrice ?? closes.at(-1) ?? null,
-          rsi: Number.isFinite(rs.at(-1)!) ? rs.at(-1) : null,
+          rsi: ((v=> (typeof v==='number' && Number.isFinite(v)) ? v : null)(rs.at(-1))),
           change24h: t24?.priceChangePercent ?? null,
         });
       } catch (e:any) {
