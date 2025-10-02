@@ -8,6 +8,7 @@ import SymbolTable, { type RowMulti, type SortKey, type SortDir } from '@/compon
 import Header from '@/components/Header';
 import Sidebar from '@/components/Sidebar';
 import CoinModal from '@/components/CoinModal';
+import AlertModal from '@/components/AlertModal';
 
 type Market = 'spot' | 'futures';
 type SummaryRow = { symbol: string; price: number | null; rsi: number | null; change24h: number | null };
@@ -30,6 +31,7 @@ const setSelectedSorted = (next: string[]) => setSelected(sortIntervals(next));
   const [filters, setFilters] = useState<{ under30: boolean; over70: boolean }>({ under30: false, over70: false });
   const [watchlist, setWatchlist] = useState<string[]>([]);
   const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
+  const [alertSymbol, setAlertSymbol] = useState<string | null>(null);
 
   const [status, setStatus] = useState('Готово');
 
@@ -168,11 +170,13 @@ const setSelectedSorted = (next: string[]) => setSelected(sortIntervals(next));
             onSort={onSort}
             rsiColumns={selectedIntervals}
             onRowClick={(sym)=> setSelectedSymbol(sym)}
+            onAlertClick={(sym)=> setAlertSymbol(sym)}
           />
         </div>
       </div>
 
       <CoinModal open={!!selectedSymbol} onClose={()=>setSelectedSymbol(null)} symbol={selectedSymbol} interval={mainIv} />
+      <AlertModal open={!!alertSymbol} onClose={()=>setAlertSymbol(null)} symbol={alertSymbol} />
     </div>
   );
 }

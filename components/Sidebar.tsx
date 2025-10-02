@@ -3,7 +3,13 @@ import { useEffect, useMemo, useState } from "react";
 import { Button, Input } from "@/components/Ui";
 import { intervals, toggleInterval, sortIntervals } from "@/lib/intervals";
 
-const CATEGORIES = ["Spot","Futures","Top 20","DeFi","Memecoins"] as const;
+const CATEGORIES: { name: string; count: number }[] = [
+  { name: "Spot", count: 500 },
+  { name: "Futures", count: 300 },
+  { name: "Top 20", count: 20 },
+  { name: "DeFi", count: 120 },
+  { name: "Memecoins", count: 80 },
+];
 
 type Props = {
   selected: string[];
@@ -24,9 +30,9 @@ export default function Sidebar({ selected, setSelected, watchlist, setWatchlist
 
   return (
     <aside className="w-full md:w-64 shrink-0 space-y-4">
-      <div className="rounded-lg border border-neutral-200 dark:border-neutral-800 p-3">
+      <div className="rounded-lg border border-neutral-200 dark:border-neutral-800 p-3 shadow-sm">
         <div className="font-medium mb-2">Timeframes</div>
-        <div className="flex flex-wrap gap-2">
+        <div className="grid grid-cols-4 gap-2">
           {intervals.map((iv) => {
             const active = selected.includes(iv);
             return (
@@ -34,7 +40,7 @@ export default function Sidebar({ selected, setSelected, watchlist, setWatchlist
                 key={iv}
                 type="button"
                 onClick={() => setSelected(sortIntervals(toggleInterval(selected, iv)))}
-                className={`px-2 py-1 rounded text-sm border ${
+                className={`px-2 py-1 rounded text-sm border text-center ${
                   active ? "bg-neutral-900 text-white border-neutral-900" : "hover:bg-neutral-100 dark:hover:bg-neutral-800"
                 }`}
               >
@@ -45,17 +51,20 @@ export default function Sidebar({ selected, setSelected, watchlist, setWatchlist
         </div>
       </div>
 
-      <div className="rounded-lg border border-neutral-200 dark:border-neutral-800 p-3">
+      <div className="rounded-lg border border-neutral-200 dark:border-neutral-800 p-3 shadow-sm">
         <div className="font-medium mb-2">Categories</div>
         <div className="grid grid-cols-2 gap-2">
           {CATEGORIES.map((c) => (
-            <Button key={c} className="w-full text-xs">{c}</Button>
+            <Button key={c.name} className="w-full text-xs flex items-center justify-between">
+              <span>{c.name}</span>
+              <span className="opacity-70">({c.count})</span>
+            </Button>
           ))}
         </div>
         <div className="mt-2 text-xs opacity-60">(placeholders)</div>
       </div>
 
-      <div className="rounded-lg border border-neutral-200 dark:border-neutral-800 p-3">
+      <div className="rounded-lg border border-neutral-200 dark:border-neutral-800 p-3 shadow-sm">
         <div className="font-medium mb-2">Watchlist</div>
         <div className="flex gap-2 mb-2">
           <Input value={addSymbol} onChange={(e)=>setAddSymbol(e.target.value)} placeholder="Add symbol" className="flex-1" />
@@ -69,7 +78,9 @@ export default function Sidebar({ selected, setSelected, watchlist, setWatchlist
             </span>
           ))}
           {watchlist.length===0 && (
-            <div className="text-xs opacity-60">No favorites yet</div>
+            <div className="text-xs opacity-70 flex items-center gap-1">
+              <span>⭐</span> <span>Add coins to your favorites</span>
+            </div>
           )}
         </div>
       </div>
