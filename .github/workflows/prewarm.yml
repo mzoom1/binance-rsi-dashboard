@@ -1,13 +1,13 @@
 name: Prewarm RSI Cache
 on:
   schedule:
-    - cron: "*/5 * * * *"
+    - cron: "*/1 * * * *"
   workflow_dispatch:
 jobs:
   warm:
     runs-on: ubuntu-latest
     steps:
-      - name: Call prewarm endpoint
+      - name: Hit prewarm endpoint
         run: |
           curl -fsS "$APP_BASE_URL/api/prewarm?token=$SECRET" -w "\nHTTP:%{http_code}\n"
         env:
