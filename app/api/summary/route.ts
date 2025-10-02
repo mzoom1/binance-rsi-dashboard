@@ -75,7 +75,8 @@ export async function GET(req: Request) {
   const market = (searchParams.get('market') || 'spot') as Market;
 
   const { fresh, stale } = ttls(interval);
-  const key = `sum:${market}:${interval}:${quote}:${offset}:${limit}`;
+  const canonicalLimit = 200;
+  const key = `sum:${market}:${interval}:${quote}:${offset}:${canonicalLimit}`;
   const now = Math.floor(Date.now()/1000);
 
   //  якщо є кеш — віддаємо
@@ -83,7 +84,8 @@ export async function GET(req: Request) {
   if (cached) {
     const age = now - (cached.ts || 0);
     if (age <= fresh) {
-      return NextResponse.json({ rows: cached.rows, total: cached.total, nextOffset: cached.nextOffset, meta: { ...cached.meta, cached: true, age, tookMs: Date.now()-t0 } });
+      const slicedC = cached.rows.slice(0, limit);
+      return NextResponse.json({ rows: slicedC, total: cached.total, nextOffset: cached.nextOffset, meta: { ...cached.meta, cached: true, age, tookMs: Date.now()-t0 } });
     }
     if (age <= stale) {
       // віддаємо застарілий та оновлюємо у фоні
@@ -94,13 +96,15 @@ export async function GET(req: Request) {
           await setJSON(key, payload, stale);
         } catch {}
       })();
-      return NextResponse.json({ rows: cached.rows, total: cached.total, nextOffset: cached.nextOffset, meta: { ...cached.meta, cached: true, stale: true, age, tookMs: Date.now()-t0 } });
+      const slicedS = cached.rows.slice(0, limit);
+      return NextResponse.json({ rows: slicedS, total: cached.total, nextOffset: cached.nextOffset, meta: { ...cached.meta, cached: true, stale: true, age, tookMs: Date.now()-t0 } });
     }
   }
 
   //  кеша нема або прострочився — рахуємо зараз і кладемо в Redis
-  const calc = await computePage(market, interval, quote, offset, limit);
+  const calc = await computePage(market, interval, quote, offset, canonicalLimit);
   const payload: Payload = { ...calc, ts: now, meta: { ...calc.meta, computed: true } };
   await setJSON(key, payload, stale);
-  return NextResponse.json({ rows: payload.rows, total: payload.total, nextOffset: payload.nextOffset, meta: { ...payload.meta, cached:false, tookMs: Date.now()-t0 } });
+  const sliced1 = payload.rows.slice(0, limit);
+  return NextResponse.json({ rows: sliced1, total: payload.total, nextOffset: payload.nextOffset, meta: { ...payload.meta, cached:false, tookMs: Date.now()-t0 } });
 }
