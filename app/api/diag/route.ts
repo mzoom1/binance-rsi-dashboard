@@ -18,6 +18,6 @@ export async function GET() {
     redisEnv: Boolean(url && tok),
     redisUrlPresent: Boolean(url),
     redisTokenPresent: Boolean(tok),
-    roundtrip, // true = реально читаємо/пишемо у спільне сховище
+    roundtrip
   });
 }
