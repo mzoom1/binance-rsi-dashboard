@@ -10,7 +10,7 @@ type Payload = { rows: Row[]; total: number; nextOffset: number|null; meta: any;
 
 function ttls(interval: string) {
   if (['1m','3m','5m','15m','30m'].includes(interval)) return { fresh: 30, stale: 60 };
-  if (['1h','2h','4h','6h','8h','12h','1d','3d','1w','1M'].includes(interval)) return { fresh: 60, stale: 300 };
+  if (['1h','2h','4h, 6h, 8h, 12h, 1d, 3d, 1w, 1M'].includes(interval)) return { fresh: 60, stale: 300 };
   return { fresh: 120, stale: 1200 };
 }
 

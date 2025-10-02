@@ -5,9 +5,6 @@ import { PersistQueryClientProvider, queryClient, persister } from '@/lib/reactQ
 import Controls from '@/components/Controls';
 import SymbolTable, { type RowMulti, type SortKey, type SortDir } from '@/components/SymbolTable';
  import { sortIntervals } from '@/lib/intervals';
-import Header from '@/components/Header';
-import Sidebar from '@/components/Sidebar';
-import CoinModal from '@/components/CoinModal';
 
 type Market = 'spot' | 'futures';
 type SummaryRow = { symbol: string; price: number | null; rsi: number | null; change24h: number | null };
@@ -28,8 +25,6 @@ function HomeClient() {
 const setSelectedSorted = (next: string[]) => setSelected(sortIntervals(next));
   const [search, setSearch] = useState('');
   const [filters, setFilters] = useState<{ under30: boolean; over70: boolean }>({ under30: false, over70: false });
-  const [watchlist, setWatchlist] = useState<string[]>([]);
-  const [selectedSymbol, setSelectedSymbol] = useState<string | null>(null);
 
   const [status, setStatus] = useState('Готово');
 
@@ -142,37 +137,28 @@ const setSelectedSorted = (next: string[]) => setSelected(sortIntervals(next));
     return arr;
   }, [filtered, sortKey, sortDir]);
 
-  const mainIv = selectedIntervals[0] ?? '1h';
-
   return (
     <div className="space-y-4">
-      <Header search={search} setSearch={setSearch} />
-      <div className="text-sm opacity-70 -mt-2">{status}</div>
-
-      <div className="flex flex-col md:flex-row gap-4">
-        <Sidebar selected={selectedIntervals} setSelected={setSelectedSorted} watchlist={watchlist} setWatchlist={setWatchlist} />
-
-        <div className="flex-1 space-y-4">
-          <Controls
-            market={market} setMarket={setMarket}
-            selected={selectedIntervals} setSelected={setSelected}
-            search={search} setSearch={setSearch}
-            filters={filters} setFilters={setFilters}
-            onRefresh={() => queries.forEach(q => q.refetch())}
-          />
-
-          <SymbolTable
-            rows={ordered}
-            sortKey={sortKey}
-            sortDir={sortDir}
-            onSort={onSort}
-            rsiColumns={selectedIntervals}
-            onRowClick={(sym)=> setSelectedSymbol(sym)}
-          />
-        </div>
+      <div className="flex items-center justify-between">
+        <h1 className="text-2xl font-semibold">Binance RSI Dashboard</h1>
+        <span className="text-sm opacity-70">{status}</span>
       </div>
 
-      <CoinModal open={!!selectedSymbol} onClose={()=>setSelectedSymbol(null)} symbol={selectedSymbol} interval={mainIv} />
+      <Controls
+        market={market} setMarket={setMarket}
+        selected={selectedIntervals} setSelected={setSelected}
+        search={search} setSearch={setSearch}
+        filters={filters} setFilters={setFilters}
+        onRefresh={() => queries.forEach(q => q.refetch())}
+      />
+
+      <SymbolTable
+        rows={ordered}
+        sortKey={sortKey}
+        sortDir={sortDir}
+        onSort={onSort}
+        rsiColumns={selectedIntervals}
+      />
     </div>
   );
 }

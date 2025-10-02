@@ -1,5 +1,4 @@
-"use client";
-import Sparkline from "@/components/Sparkline";
+'use client';
 
 export type RowMulti = {
   symbol: string;
@@ -40,14 +39,12 @@ export default function SymbolTable({
   sortDir,
   onSort,
   rsiColumns,
-  onRowClick,
 }: {
   rows: RowMulti[];
   sortKey: SortKey;
   sortDir: SortDir;
   onSort: (key: SortKey) => void;
   rsiColumns: string[];
-  onRowClick?: (symbol: string) => void;
 }) {
   return (
     <div className="overflow-x-auto rounded-lg border border-neutral-200 dark:border-neutral-800">
@@ -56,7 +53,6 @@ export default function SymbolTable({
           <tr className="text-left">
             <SortHeader label="Symbol" active={sortKey==='symbol'} dir={sortDir} onClick={()=>onSort('symbol')} />
             <SortHeader label="Price" active={sortKey==='price'} dir={sortDir} onClick={()=>onSort('price')} />
-            <th className="px-3 py-2 w-[120px]">RSI spark</th>
             {rsiColumns.map(iv => (
               <SortHeader
                 key={iv}
@@ -70,35 +66,23 @@ export default function SymbolTable({
           </tr>
         </thead>
         <tbody>
-          {rows.map((r) => {
-            const mainIv = rsiColumns[0];
-            return (
-              <tr
-                key={r.symbol}
-                className="border-t border-neutral-200 dark:border-neutral-800 hover:bg-neutral-50/70 dark:hover:bg-neutral-900/50 cursor-pointer"
-                onClick={()=> onRowClick?.(r.symbol)}
-              >
-                <td className="px-3 py-2 font-medium">{r.symbol}</td>
-                <td className="px-3 py-2">{r.price?.toFixed?.(4) ?? '—'}</td>
-                <td className="px-3 py-2"><Sparkline symbol={r.symbol} interval={mainIv || '1h'} /></td>
-                {rsiColumns.map(iv => {
-                  const val = r.rsiByIv[iv];
-                  const color = val == null ? undefined : (val < 30 ? '#4ade80' : val > 70 ? '#f87171' : '#60a5fa');
-                  return (
-                    <td key={iv} className="px-3 py-2">
-                      {val != null ? <span style={{ color }}>{(val as number).toFixed(2)}</span> : '—'}
-                    </td>
-                  );
-                })}
-                <td className="px-3 py-2">
-                  {Number.isFinite(r.change24h as number) ? (r.change24h as number).toFixed(2) + '%' : '—'}
+          {rows.map((r) => (
+            <tr key={r.symbol} className="border-t border-neutral-200 dark:border-neutral-800">
+              <td className="px-3 py-2 font-medium">{r.symbol}</td>
+              <td className="px-3 py-2">{r.price?.toFixed?.(4) ?? '—'}</td>
+              {rsiColumns.map(iv => (
+                <td key={iv} className="px-3 py-2">
+                  {r.rsiByIv[iv] != null ? (r.rsiByIv[iv] as number).toFixed(2) : '—'}
                 </td>
-              </tr>
-            );
-          })}
+              ))}
+              <td className="px-3 py-2">
+                {Number.isFinite(r.change24h as number) ? (r.change24h as number).toFixed(2) + '%' : '—'}
+              </td>
+            </tr>
+          ))}
           {rows.length === 0 && (
             <tr>
-              <td className="px-3 py-6 text-center opacity-60" colSpan={3 + rsiColumns.length + 1}>
+              <td className="px-3 py-6 text-center opacity-60" colSpan={2 + rsiColumns.length + 1}>
                 Немає даних. Спробуйте оновити або змінити інтервал.
               </td>
             </tr>
