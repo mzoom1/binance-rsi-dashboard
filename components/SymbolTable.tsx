@@ -1,5 +1,6 @@
 "use client";
 import Sparkline from "@/components/Sparkline";
+import { DEFI_SYMBOLS, MEMECOIN_SYMBOLS } from "@/lib/lists";
 
 export type RowMulti = {
   symbol: string;
@@ -41,6 +42,8 @@ export default function SymbolTable({
   onSort,
   rsiColumns,
   onRowClick,
+  category = 'spot',
+  watchlist = [],
 }: {
   rows: RowMulti[];
   sortKey: SortKey;
@@ -48,11 +51,34 @@ export default function SymbolTable({
   onSort: (key: SortKey) => void;
   rsiColumns: string[];
   onRowClick?: (symbol: string) => void;
+  category?: 'all' | 'spot' | 'futures' | 'top20' | 'defi' | 'memes';
+  watchlist?: string[];
 }) {
+  // Local category filtering (Top20/DeFi/Memecoins)
+  let view = rows;
+  if (category === 'defi') {
+    const set = new Set(DEFI_SYMBOLS);
+    view = rows.filter(r => set.has(r.symbol));
+  } else if (category === 'memes') {
+    const set = new Set(MEMECOIN_SYMBOLS);
+    view = rows.filter(r => set.has(r.symbol));
+  } else if (category === 'top20') {
+    // No volume in summary rows; fallback to |24h change| as requested
+    view = [...rows]
+      .sort((a,b)=>Math.abs((b.change24h ?? 0)) - Math.abs((a.change24h ?? 0)))
+      .slice(0, 20);
+  }
+
+  // Watchlist prioritization (keep internal ordering)
+  const wl = new Set((watchlist || []).map(s=>s.toUpperCase()));
+  const wlRows = view.filter(r => wl.has(r.symbol));
+  const otherRows = view.filter(r => !wl.has(r.symbol));
+  const orderedView = [...wlRows, ...otherRows];
+
   return (
     <div className="overflow-x-auto rounded-lg border border-neutral-200 dark:border-neutral-800">
       <table className="w-full text-sm">
-        <thead className="bg-neutral-50 dark:bg-neutral-900/50">
+        <thead className="bg-neutral-50 dark:bg-neutral-900/50 sticky top-0 z-10">
           <tr className="text-left">
             <SortHeader label="Symbol" active={sortKey==='symbol'} dir={sortDir} onClick={()=>onSort('symbol')} />
             <SortHeader label="Price" active={sortKey==='price'} dir={sortDir} onClick={()=>onSort('price')} />
@@ -70,7 +96,7 @@ export default function SymbolTable({
           </tr>
         </thead>
         <tbody>
-          {rows.map((r) => {
+          {orderedView.map((r) => {
             const mainIv = rsiColumns[0];
             return (
               <tr
@@ -83,20 +109,30 @@ export default function SymbolTable({
                 <td className="px-3 py-2"><Sparkline symbol={r.symbol} interval={mainIv || '1h'} /></td>
                 {rsiColumns.map(iv => {
                   const val = r.rsiByIv[iv];
-                  const color = val == null ? undefined : (val < 30 ? '#4ade80' : val > 70 ? '#f87171' : '#60a5fa');
+                  let badge = 'bg-blue-500/15 text-blue-400';
+                  if (typeof val === 'number' && val < 30) badge = 'bg-green-500/15 text-green-400';
+                  if (typeof val === 'number' && val > 70) badge = 'bg-red-500/15 text-red-400';
                   return (
                     <td key={iv} className="px-3 py-2">
-                      {val != null ? <span style={{ color }}>{(val as number).toFixed(2)}</span> : '—'}
+                      {val != null ? (
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs ${badge}`}>
+                          {(val as number).toFixed(2)}
+                        </span>
+                      ) : '—'}
                     </td>
                   );
                 })}
                 <td className="px-3 py-2">
-                  {Number.isFinite(r.change24h as number) ? (r.change24h as number).toFixed(2) + '%' : '—'}
+                  {Number.isFinite(r.change24h as number) ? (
+                    <span className={(r.change24h as number) >= 0 ? 'text-green-400' : 'text-red-400'}>
+                      {(r.change24h as number).toFixed(2)}%
+                    </span>
+                  ) : '—'}
                 </td>
               </tr>
             );
           })}
-          {rows.length === 0 && (
+          {orderedView.length === 0 && (
             <tr>
               <td className="px-3 py-6 text-center opacity-60" colSpan={3 + rsiColumns.length + 1}>
                 Немає даних. Спробуйте оновити або змінити інтервал.
